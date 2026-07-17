@@ -3,7 +3,7 @@ import { Client, Collection, ChatInputCommandInteraction, SlashCommandBuilder, S
 export interface Command {
   data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
   category?: string;
-  execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+  execute: (interaction: ChatInputCommandInteraction) => Promise<unknown>;
 }
 
 export interface ExtendedClient extends Client {
