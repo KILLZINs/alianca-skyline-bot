@@ -35,7 +35,9 @@ export default {
         .setTimestamp()
         .setFooter({ text: '⚔️ Aliança Skyline' });
 
-      await message.channel.send({ embeds: [embed] }).catch(console.error);
+      if ('send' in message.channel) {
+        await (message.channel as TextChannel).send({ embeds: [embed] }).catch(console.error);
+      }
     }
   },
 };

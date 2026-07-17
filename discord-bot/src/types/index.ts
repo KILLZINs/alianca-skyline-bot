@@ -1,13 +1,11 @@
 import {
-  SlashCommandBuilder,
-  ContextMenuCommandBuilder,
   ChatInputCommandInteraction,
   Collection,
   Client,
 } from 'discord.js';
 
 export interface Command {
-  data: SlashCommandBuilder | ContextMenuCommandBuilder | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
+  data: { name: string; toJSON(): object };
   category: string;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }

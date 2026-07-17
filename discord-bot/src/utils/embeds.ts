@@ -83,3 +83,9 @@ export function levelBar(xp: number, xpNeeded: number, length = 10): string {
   const empty = length - filled;
   return '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
 }
+
+export function colorFromLevel(level: number): number {
+  if (level >= 20) return COLORS.GOLD;
+  if (level >= 10) return COLORS.SECONDARY;
+  return COLORS.PRIMARY;
+}

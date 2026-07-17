@@ -31,7 +31,7 @@ for (const folder of commandFolders) {
   for (const file of commandFiles) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const command: Command = require(join(folderPath, file)).default;
-    if (command?.data && command?.execute) {
+    if (command && typeof command.execute === 'function') {
       client.commands.set(command.data.name, command);
     }
   }
