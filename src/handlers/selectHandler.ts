@@ -17,6 +17,8 @@ export async function handleSelect(interaction: AnySelectMenuInteraction) {
     if (prefix === 'ticket' && action === 'category') return await ticketCategory(interaction as StringSelectMenuInteraction);
     if (prefix === 'rpg_select') return await (await import('./../rpg/handlers/rpgSelectHandler')).handleRpgSelect(interaction as StringSelectMenuInteraction, action);
     if (prefix === 'selfrole' && action === 'choose') return await selfRoleChoose(interaction as StringSelectMenuInteraction);
+    if (prefix === 'selfrole' && action === 'add')    return await selfRoleAdd(interaction as StringSelectMenuInteraction);
+    if (prefix === 'selfrole' && action === 'remove') return await selfRoleRemove(interaction as StringSelectMenuInteraction);
     if (prefix === 'selfrole_admin') return await selfRoleAdminSelect(interaction, action, parts);
   } catch (err) {
     console.error('Select error:', err);
@@ -90,7 +92,7 @@ async function ticketCategory(i: StringSelectMenuInteraction) {
   await i.editReply({ embeds: [successEmbed('Ticket Criado!', `Seu ticket foi aberto em ${ticketCh}`)] });
 }
 
-// ── Selfrole — user picks a role from the dropdown ──────────────────────────
+// ── Selfrole — toggle legado (backward compat com mensagens antigas) ─────────
 async function selfRoleChoose(i: StringSelectMenuInteraction) {
   const roleId = i.values[0];
   await i.deferReply({ ephemeral: true });
@@ -112,6 +114,50 @@ async function selfRoleChoose(i: StringSelectMenuInteraction) {
     }
   } catch {
     return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Não foi possível alterar o cargo. Verifique se o bot tem permissão de gerenciar cargos.')] });
+  }
+}
+
+// ── Selfrole — adicionar cargo explicitamente ─────────────────────────────────
+async function selfRoleAdd(i: StringSelectMenuInteraction) {
+  const roleId = i.values[0];
+  await i.deferReply({ ephemeral: true });
+
+  const member = i.member as GuildMember;
+  if (!member) return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Não foi possível verificar seu perfil.')] });
+
+  const role = i.guild?.roles.cache.get(roleId);
+  if (!role) return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Este cargo não existe mais no servidor.')] });
+
+  if (member.roles.cache.has(roleId)) {
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0xF39C12).setDescription(`⚠️ Você já possui o cargo ${role}. Use o menu **🗑️ Remover** para removê-lo.`)] });
+  }
+  try {
+    await member.roles.add(roleId);
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`)] });
+  } catch {
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Não foi possível adicionar o cargo. Verifique se o bot tem permissão de gerenciar cargos.')] });
+  }
+}
+
+// ── Selfrole — remover cargo explicitamente ───────────────────────────────────
+async function selfRoleRemove(i: StringSelectMenuInteraction) {
+  const roleId = i.values[0];
+  await i.deferReply({ ephemeral: true });
+
+  const member = i.member as GuildMember;
+  if (!member) return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Não foi possível verificar seu perfil.')] });
+
+  const role = i.guild?.roles.cache.get(roleId);
+  if (!role) return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Este cargo não existe mais no servidor.')] });
+
+  if (!member.roles.cache.has(roleId)) {
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0xF39C12).setDescription(`⚠️ Você não possui o cargo ${role}.`)] });
+  }
+  try {
+    await member.roles.remove(roleId);
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription(`🗑️ O cargo ${role} foi **removido** do seu perfil.`)] });
+  } catch {
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setDescription('❌ Não foi possível remover o cargo. Verifique se o bot tem permissão de gerenciar cargos.')] });
   }
 }
 
