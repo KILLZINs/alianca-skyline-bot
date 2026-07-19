@@ -6,7 +6,7 @@ export default {
   once: false,
   async execute(ban: GuildBan) {
     // Buscar audit log para saber quem desbanou
-    let moderator = ban.client.user!;
+    let moderator: import('discord.js').User | null = ban.client.user;
     try {
       const logs = await ban.guild.fetchAuditLogs({ type: 23 /* MemberBanRemove */, limit: 1 });
       const entry = logs.entries.first();

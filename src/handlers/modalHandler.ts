@@ -677,7 +677,7 @@ async function handleCargoMenu(i: ModalSubmitInteraction, action: string, _parts
 
   // Resolve o canal a partir do campo 'canal' do modal (sempre obrigatório)
   const rawCanal = (getField('canal') ?? '').replace(/[<#>]/g, '');
-  const channelId = rawCanal || i.channelId;
+  const channelId: string = rawCanal || i.channelId!;
   const targetChannel = i.guild?.channels.cache.get(channelId) as TextChannel | undefined;
 
   // ── Criar Menu ───────────────────────────────────────────────────────
