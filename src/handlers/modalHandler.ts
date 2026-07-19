@@ -682,15 +682,20 @@ async function handleCargoMenu(i: ModalSubmitInteraction, action: string, _parts
 
   // ── Criar Menu ───────────────────────────────────────────────────────
   if (action === 'criar') {
-    if (!targetChannel) {
-      return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `O canal \`${channelId}\` não existe neste servidor.`)] });
+    // channelId pode vir de parts[2] (fluxo via ChannelSelectMenu) ou do campo 'canal' (fluxo legado)
+    const chanFromParts = _parts[2] ?? null;
+    const resolvedChannelId = chanFromParts ?? channelId;
+    const resolvedChannel = i.guild?.channels.cache.get(resolvedChannelId) as TextChannel | undefined;
+
+    if (!resolvedChannel) {
+      return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `O canal \`${resolvedChannelId}\` não existe neste servidor.`)] });
     }
-    const titulo   = getField('titulo')!;
+    const titulo    = getField('titulo')!;
     const descricao = getField('descricao');
-    await prisma.selfRoleMenu.create({ data: { guildId, channelId, title: titulo, description: descricao } });
+    await prisma.selfRoleMenu.create({ data: { guildId, channelId: resolvedChannelId, title: titulo, description: descricao } });
     return i.editReply({
       embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Menu Criado!')
-        .setDescription(`Menu **${titulo}** criado para ${targetChannel}.\n\nAgora clique em **➕ Adicionar Cargo** no painel para adicionar cargos, depois em **📤 Publicar** para enviar ao canal.`)],
+        .setDescription(`Menu **${titulo}** criado para ${resolvedChannel}.\n\nAgora clique em **➕ Adicionar Cargo** para adicionar cargos, depois em **📤 Publicar** para enviar ao canal.`)],
     });
   }
 
