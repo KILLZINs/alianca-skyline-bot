@@ -32,17 +32,31 @@ export function buildHabilidadesEmbed(char: FullCharacter): { embed: EmbedBuilde
       }).join('\n\n')
     : '*Nenhuma habilidade disponível para sua classe.*';
 
+  // Dica de dano estimado da habilidade equipada
+  let dmgHint = '';
+  if (char.divineSkillId) {
+    const ds = DIVINE_SKILLS[char.divineSkillId];
+    if (ds && ds.type === 'ataque') {
+      const eff = skillEffectValue(ds, char.divineSkillRank as any);
+      dmgHint = `\n> 📐 Multiplicador de dano atual: **×${eff.toFixed(2)}**`;
+    }
+  }
+
   const embed = new EmbedBuilder()
     .setColor(0xF1C40F)
     .setTitle('✨ Habilidades Divinas')
-    .setDescription(`Habilidades divinas são poderes únicos da sua classe que evoluem com o uso.\nSua classe: **${cls?.name ?? char.class}** ${cls?.emoji ?? ''}`)
-    .addFields(
-      { name: '⚡ Habilidade Equipada', value: currentSkillText, inline: false },
-      { name: `📚 Habilidades de ${cls?.name ?? 'sua classe'}`, value: skillListText, inline: false },
-      { name: '🔑 Pontos de Skill', value: `**${char.skillPoints}**`, inline: true },
-      { name: '📊 Nível', value: `**${char.level}**`, inline: true },
+    .setDescription(
+      `Habilidades divinas são poderes únicos da sua classe que evoluem com o uso em combate.\n` +
+      `Sua classe: **${cls?.name ?? char.class}** ${cls?.emoji ?? ''}`
     )
-    .setFooter({ text: 'Selecione uma habilidade para equipar. O rank sobe com o uso em combate.' });
+    .addFields(
+      { name: '⚡ Habilidade Equipada', value: currentSkillText + dmgHint, inline: false },
+      { name: `📚 Habilidades Disponíveis — ${cls?.name ?? 'sua classe'}`, value: skillListText, inline: false },
+      { name: '🔑 Pontos de Skill', value: `**${char.skillPoints}**`, inline: true },
+      { name: '📊 Nível Atual', value: `**${char.level}**`, inline: true },
+      { name: '📖 Como funciona', value: 'Ranks: F → E → D → C → B → A → S → SS → **SSS**\nO rank sobe com o uso em combate.', inline: false },
+    )
+    .setFooter({ text: 'Selecione uma habilidade abaixo para equipá-la.' });
 
   // select para equipar habilidade
   const unlocked = availableSkills.filter(s => char.level >= s.unlockLevel);
@@ -69,7 +83,8 @@ export function buildHabilidadesEmbed(char: FullCharacter): { embed: EmbedBuilde
 
 export function buildHabilidadesButtons(char: FullCharacter): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:habilidades').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(ButtonStyle.Primary),
   );
 }
