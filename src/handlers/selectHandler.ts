@@ -134,8 +134,8 @@ async function selfRoleAdminSelect(i: AnySelectMenuInteraction, action: string, 
       .setCustomId(`cargo_menu:criar:${chanId}`)
       .setTitle('Criar Menu de Cargos — Passo 2/2');
     modal.addComponents(
-      new AR<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título do menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Ex: 🎭 Escolha seus cargos')),
-      new AR<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
+      new AR<any>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título do menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Ex: 🎭 Escolha seus cargos')),
+      new AR<any>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
     );
     return i.followUp({ content: '\u200b', components: [] }).then(() => (i as any).showModal(modal)).catch(async () => {
       // fallback: can't show modal after deferUpdate, send follow-up with instructions
