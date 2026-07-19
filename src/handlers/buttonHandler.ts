@@ -1,6 +1,7 @@
 import {
   ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder, TextChannel,
+  RoleSelectMenuBuilder, ChannelSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits, GuildMember,
 } from 'discord.js';
 import { prisma } from '../database/client';
@@ -39,7 +40,8 @@ export async function handleButton(interaction: ButtonInteraction) {
       case 'embedcfg':  return await (await import('./configHandler')).handleEmbedCfgButton(interaction, action);
       case 'embeds':    return await (await import('./embedsHandler')).handleEmbedsButtonRaw(interaction);
       case 'logs':      return await (await import('./logsHandler')).handleLogsButton(interaction, action);
-      case 'selfrole':  return await selfRoleToggle(interaction, extra);
+      case 'selfrole':       return await selfRoleToggle(interaction, extra);
+      case 'selfrole_admin': return await selfRoleAdminButtons(interaction, action, extra);
     }
   } catch (err) {
     console.error('Button error:', err);
@@ -547,53 +549,138 @@ async function adminButtons(i: ButtonInteraction, action: string) {
   }
 
   if (action === 'cargo_criar') {
-    const modal = new ModalBuilder().setCustomId('cargo_menu:criar').setTitle('Criar Menu de Cargos');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal onde publicar o menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 123456789012345678')),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título do menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Ex: 🎭 Escolha seus cargos')),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
+    // Passo 1: escolher o canal via ChannelSelectMenu
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('🎭 Criar Menu de Cargos — Passo 1/2')
+      .setDescription('Selecione o **canal** onde o menu de cargos será publicado.');
+    const chanSelect = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+      new ChannelSelectMenuBuilder()
+        .setCustomId('selfrole_admin:channel_for_criar')
+        .setPlaceholder('📢 Selecione o canal de destino...'),
     );
-    return i.showModal(modal);
+    return i.reply({ embeds: [embed], components: [chanSelect], ephemeral: true });
   }
 
   if (action === 'cargo_adicionar') {
-    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, include: { entries: true }, orderBy: { createdAt: 'desc' } });
     if (!menus.length) {
       return i.reply({ embeds: [errorEmbed('Sem Menus', 'Crie um menu primeiro clicando em **🆕 Criar Menu**.')], ephemeral: true });
     }
-    const modal = new ModalBuilder().setCustomId('cargo_menu:adicionar').setTitle('Adicionar Cargo ao Menu');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('role_id').setLabel('ID do Cargo').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 123456789012345678')),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('label').setLabel('Nome do botão').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(80)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('emoji').setLabel('Emoji (opcional)').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(4)),
+
+    // Se só há um menu, vai direto para seleção de cargo
+    if (menus.length === 1) {
+      const m = menus[0];
+      if (m.entries.length >= 25) {
+        return i.reply({ embeds: [errorEmbed('Limite', 'Este menu já tem 25 cargos (máximo).')], ephemeral: true });
+      }
+      const embed = baseEmbed(COLORS.DARK)
+        .setTitle(`➕ Adicionar Cargo — ${m.title}`)
+        .setDescription(`Selecione o **cargo** que deseja adicionar ao menu.\n> Atualmente: **${m.entries.length}** cargo(s)`);
+      const roleSelect = new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
+        new RoleSelectMenuBuilder()
+          .setCustomId(`selfrole_admin:add_role:${m.id}`)
+          .setPlaceholder('🎭 Selecione o cargo a adicionar...'),
+      );
+      return i.reply({ embeds: [embed], components: [roleSelect], ephemeral: true });
+    }
+
+    // Múltiplos menus: escolher qual primeiro
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('➕ Adicionar Cargo — Escolha o Menu')
+      .setDescription('Você tem vários menus. Selecione em qual deseja adicionar o cargo:');
+    const menuSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('selfrole_admin:menu_for_add')
+        .setPlaceholder('📋 Selecione o menu...')
+        .addOptions(
+          menus.map(m =>
+            new StringSelectMenuOptionBuilder()
+              .setValue(m.id)
+              .setLabel(m.title.slice(0, 100))
+              .setDescription(`${m.entries.length} cargo(s) • <#${m.channelId}>`.slice(0, 100))
+              .setEmoji('🎭')
+          )
+        ),
     );
-    return i.showModal(modal);
+    return i.reply({ embeds: [embed], components: [menuSelect], ephemeral: true });
   }
 
   if (action === 'cargo_publicar') {
-    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, include: { entries: true }, orderBy: { createdAt: 'desc' } });
     if (!menus.length) {
       return i.reply({ embeds: [errorEmbed('Sem Menus', 'Crie um menu primeiro.')], ephemeral: true });
     }
-    const modal = new ModalBuilder().setCustomId('cargo_menu:publicar').setTitle('Publicar Menu de Cargos');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu a publicar').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('📤 Publicar Menu de Cargos')
+      .setDescription('Selecione qual menu deseja publicar (ou atualizar):');
+    const menuSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('selfrole_admin:menu_for_pub')
+        .setPlaceholder('📋 Selecione o menu...')
+        .addOptions(
+          menus.map(m =>
+            new StringSelectMenuOptionBuilder()
+              .setValue(m.id)
+              .setLabel(m.title.slice(0, 100))
+              .setDescription(`${m.entries.length} cargo(s) • ${m.messageId ? '✅ Publicado' : '⏳ Não publicado'}`.slice(0, 100))
+              .setEmoji(m.messageId ? '✅' : '📤')
+          )
+        ),
     );
-    return i.showModal(modal);
+    return i.reply({ embeds: [embed], components: [menuSelect], ephemeral: true });
   }
 
   if (action === 'cargo_remover') {
-    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, include: { entries: true }, orderBy: { createdAt: 'desc' } });
     if (!menus.length) {
       return i.reply({ embeds: [errorEmbed('Sem Menus', 'Nenhum menu existente.')], ephemeral: true });
     }
-    const modal = new ModalBuilder().setCustomId('cargo_menu:remover').setTitle('Remover Cargo do Menu');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('role_id').setLabel('ID do cargo a remover').setStyle(TextInputStyle.Short).setRequired(true)),
+
+    // Se só há um menu, vai direto para seleção de entrada
+    if (menus.length === 1) {
+      const m = menus[0];
+      if (!m.entries.length) {
+        return i.reply({ embeds: [errorEmbed('Menu Vazio', 'Este menu não tem cargos para remover.')], ephemeral: true });
+      }
+      const embed = baseEmbed(COLORS.DARK)
+        .setTitle(`🗑️ Remover Cargo — ${m.title}`)
+        .setDescription('Selecione o cargo que deseja remover:');
+      const entrySelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`selfrole_admin:rem_entry:${m.id}`)
+          .setPlaceholder('🗑️ Selecione o cargo a remover...')
+          .addOptions(
+            m.entries.map(e =>
+              new StringSelectMenuOptionBuilder()
+                .setValue(e.id)
+                .setLabel(e.label.slice(0, 100))
+                .setDescription(`ID: ${e.roleId}`)
+                .setEmoji(e.emoji && /^\d{17,20}$/.test(e.emoji) ? { id: e.emoji } : e.emoji ? { name: e.emoji } : { name: '🏷️' })
+            )
+          ),
+      );
+      return i.reply({ embeds: [embed], components: [entrySelect], ephemeral: true });
+    }
+
+    // Múltiplos menus: escolher qual primeiro
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('🗑️ Remover Cargo — Escolha o Menu')
+      .setDescription('Selecione de qual menu deseja remover um cargo:');
+    const menuSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('selfrole_admin:menu_for_rem')
+        .setPlaceholder('📋 Selecione o menu...')
+        .addOptions(
+          menus.map(m =>
+            new StringSelectMenuOptionBuilder()
+              .setValue(m.id)
+              .setLabel(m.title.slice(0, 100))
+              .setDescription(`${m.entries.length} cargo(s)`.slice(0, 100))
+              .setEmoji('🎭')
+          )
+        ),
     );
-    return i.showModal(modal);
+    return i.reply({ embeds: [embed], components: [menuSelect], ephemeral: true });
   }
 }
 
@@ -1141,6 +1228,39 @@ async function rpgwipeButtons(interaction: ButtonInteraction, action: string) {
           .setTimestamp(),
       ],
     });
+  }
+}
+
+// ── Selfrole Admin — publicar confirmação ───────────────────────────────────
+async function selfRoleAdminButtons(i: ButtonInteraction, action: string, extra: string[]) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferUpdate();
+
+  if (action === 'confirm_pub') {
+    const menuId = extra[0];
+    const menu = await prisma.selfRoleMenu.findUnique({
+      where: { id: menuId },
+      include: { entries: true },
+    });
+    if (!menu) return i.editReply({ embeds: [errorEmbed('Menu não encontrado', 'Este menu não existe mais.')], components: [] });
+    if (!menu.entries.length) return i.editReply({ embeds: [errorEmbed('Menu Vazio', 'Adicione pelo menos um cargo antes de publicar.')], components: [] });
+
+    const targetChannel = i.guild?.channels.cache.get(menu.channelId) as TextChannel | undefined;
+    if (!targetChannel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'O canal do menu não existe mais.')], components: [] });
+
+    const { buildMenuMessage } = await import('../utils/selfRole');
+    const msgData = buildMenuMessage(menu) as any;
+
+    if (menu.messageId) {
+      try {
+        const msg = await (targetChannel as any).messages.fetch(menu.messageId);
+        await msg.edit(msgData);
+        return i.editReply({ embeds: [successEmbed('✅ Menu Atualizado!', `Menu **${menu.title}** atualizado em ${targetChannel} com **${menu.entries.length}** cargo(s).`)], components: [] });
+      } catch { /* mensagem deletada, enviar nova */ }
+    }
+    const msg = await (targetChannel as any).send(msgData);
+    await prisma.selfRoleMenu.update({ where: { id: menu.id }, data: { messageId: msg.id } });
+    return i.editReply({ embeds: [successEmbed('✅ Menu Publicado!', `Menu **${menu.title}** publicado em ${targetChannel} com **${menu.entries.length}** cargo(s)!`)], components: [] });
   }
 }
 
