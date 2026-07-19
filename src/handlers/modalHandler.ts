@@ -55,6 +55,7 @@ export async function handleModal(i: ModalSubmitInteraction) {
     if (prefix === 'servidor_modal')  return await (await import('./allianceHandler')).handleServidorModal(i, action);
     if (prefix === 'embedcfg_modal')  return await (await import('./configHandler')).handleEmbedCfgModal(i, action);
     if (prefix === 'embeds_modal')    return await (await import('./embedsHandler')).handleEmbedCfgModal(i, action);
+    if (prefix === 'logs_modal')      return await (await import('./logsHandler')).handleLogsModal(i, action);
   } catch (err) {
     console.error('Modal error:', err);
     const e = errorEmbed('Erro', 'Ocorreu um erro ao processar este formulário.');

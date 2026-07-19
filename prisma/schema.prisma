@@ -288,6 +288,7 @@ model GuildConfig {
   xpCooldown            Int      @default(60)
   antiSpam              Boolean  @default(false)
   antiLinks             Boolean  @default(false)
+  logFlags              Int      @default(31)
   updatedAt             DateTime @updatedAt @default(now())
 
   @@map("guild_config")

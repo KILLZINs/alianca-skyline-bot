@@ -4,6 +4,7 @@ import { COLORS, EMOJIS } from '../utils/embeds';
 import { prisma } from '../database/client';
 import { isAllianceServer, buildOfficialAllianceEmbed } from '../utils/alliance';
 import { applyTemplate } from '../utils/embedTemplates';
+import { sendLog, logMemberJoin, LOG } from '../utils/logger';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -30,6 +31,9 @@ export default {
     }
 
     const config = await getConfig(guildId);
+
+    // ─── Log de entrada ───────────────────────────────────────────────────────
+    sendLog(member.guild, LOG.MEMBERS, logMemberJoin(member)).catch(() => null);
 
     // ─── Auto-role ─────────────────────────────────────────────────────────────
     const roleToAssign = config.autoRoleId ?? config.memberRoleId ?? process.env.MEMBER_ROLE_ID;

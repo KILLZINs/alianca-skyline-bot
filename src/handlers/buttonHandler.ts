@@ -38,6 +38,7 @@ export async function handleButton(interaction: ButtonInteraction) {
       case 'servidor':  return await (await import('./allianceHandler')).handleServidorButton(interaction, action);
       case 'embedcfg':  return await (await import('./configHandler')).handleEmbedCfgButton(interaction, action);
       case 'embeds':    return await (await import('./embedsHandler')).handleEmbedsButtonRaw(interaction);
+      case 'logs':      return await (await import('./logsHandler')).handleLogsButton(interaction, action);
     }
   } catch (err) {
     console.error('Button error:', err);
