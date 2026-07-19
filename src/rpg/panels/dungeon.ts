@@ -2,7 +2,7 @@ import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
 } from 'discord.js';
-import { FullCharacter, computeStats } from '../services/character';
+import { FullCharacter, computeStats, hpBar } from '../services/character';
 import { getLocation } from '../constants/locations';
 import { getEnemiesForLocation, getBossesForLocation, getEnemy } from '../constants/enemies';
 import { getItem } from '../constants/items';
@@ -38,17 +38,26 @@ export function buildDungeonEmbed(char: FullCharacter): EmbedBuilder {
     ? bosses.map(b => `${b.emoji} **${b.name}** [BOSS] — ${b.xpReward} XP | ${b.goldMin}~${b.goldMax} 💰`).join('\n')
     : '*Nenhum boss disponível (Nível insuficiente)*';
 
-  return new EmbedBuilder()
-    .setColor(0xE74C3C)
-    .setTitle(`⚔️ Dungeons — ${loc.emoji} ${loc.name}`)
-    .addFields(
-      { name: '👹 Inimigos da Região', value: enemyList, inline: false },
-      { name: '💀 Bosses', value: bossList, inline: false },
-      { name: '❤️ Seu HP', value: `**${char.currentHp}/${stats.maxHp}**`, inline: true },
-      { name: '⚡ Energia', value: `**${char.currentEnergy}/${stats.maxEnergy}**`, inline: true },
-      { name: '⏱️ Cooldown', value: cd.onCooldown ? `🔴 ${cd.remaining}` : '🟢 Pronto!', inline: true },
-    )
-    .setFooter({ text: 'Selecione o inimigo para batalhar. Bosses dão muito mais recompensa!' });
+  const hpPct = stats.maxHp > 0 ? char.currentHp / stats.maxHp : 1;
+  const hpDisplay = `${hpBar(char.currentHp, stats.maxHp)} **${char.currentHp}/${stats.maxHp}**${hpPct < 0.3 ? ' ⚠️' : ''}`;
+
+  const embed = new EmbedBuilder()
+    .setColor(hpPct < 0.3 ? 0xFF6B35 : 0xE74C3C)
+    .setTitle(`⚔️ Dungeons — ${loc.emoji} ${loc.name}`);
+
+  if (hpPct < 0.3) {
+    embed.addFields({ name: '⚠️ HP CRÍTICO — Cuidado!', value: 'Seu HP está muito baixo. Considere ir à **🏰 Cidade → 🏥 Curar HP** antes de batalhar.', inline: false });
+  }
+
+  embed.addFields(
+    { name: '👹 Inimigos da Região', value: enemyList, inline: false },
+    { name: '💀 Bosses', value: bossList, inline: false },
+    { name: '❤️ HP', value: hpDisplay, inline: true },
+    { name: '⚡ Energia', value: `**${char.currentEnergy}/${stats.maxEnergy}**`, inline: true },
+    { name: '⏱️ Cooldown', value: cd.onCooldown ? `🔴 ${cd.remaining}` : '🟢 Pronto!', inline: true },
+  );
+
+  return embed.setFooter({ text: 'Selecione o inimigo para batalhar. Bosses dão muito mais recompensa!' });
 }
 
 export function buildDungeonSelect(char: FullCharacter): ActionRowBuilder<StringSelectMenuBuilder> | null {
@@ -85,8 +94,10 @@ export function buildDungeonButtons(char: FullCharacter): ActionRowBuilder<Butto
 
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:dungeon_aleatorio').setLabel('⚡ Batalha Rápida').setStyle(ButtonStyle.Danger).setDisabled(!hasEnemies || cd.onCooldown || char.currentHp <= 0),
-    new ButtonBuilder().setCustomId('rpg:dungeon_boss').setLabel('💀 Enfrentar Boss').setStyle(ButtonStyle.Danger).setDisabled(bosses.length === 0 || cd.onCooldown || char.currentHp <= 0),
-    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:dungeon_boss').setLabel('💀 Boss').setStyle(ButtonStyle.Danger).setDisabled(bosses.length === 0 || cd.onCooldown || char.currentHp <= 0),
+    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -125,32 +136,53 @@ function buildCombatResultEmbed(result: Awaited<ReturnType<typeof runCombat>>, c
   const fullLog = result.log.join('\n');
   const logSlice = fullLog.length > 1800 ? '...\n' + fullLog.slice(-1600) : fullLog;
 
+  // Barra de HP após o combate
+  const stats = computeStats(char);
+  const hpPct = stats.maxHp > 0 ? result.playerHpLeft / stats.maxHp : 0;
+  const hpBarStr = hpBar(result.playerHpLeft, stats.maxHp);
+  const hpCritical = hpPct < 0.3 && result.playerHpLeft > 0;
+  const hpStatus = hpCritical ? ' ⚠️ **HP CRÍTICO!**' : (result.playerHpLeft <= 0 ? ' 💀 Derrotado' : '');
+
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(title)
     .setDescription(logSlice)
     .addFields(
-      { name: '⭐ XP Ganho',        value: `+**${result.xpGained}**`,       inline: true },
-      { name: '💰 Ouro Ganho',      value: `+**${result.goldGained}**`,     inline: true },
-      { name: '❤️ HP Restante',     value: `**${result.playerHpLeft}**`,    inline: true },
-      { name: '⚡ Energia Restante', value: `**${result.playerEnergyLeft}**`, inline: true },
+      { name: '⭐ XP Ganho',  value: `+**${result.xpGained}**`,   inline: true },
+      { name: '💰 Ouro Ganho', value: `+**${result.goldGained}**`, inline: true },
+      {
+        name: `❤️ HP Restante${hpStatus}`,
+        value: `${hpBarStr} **${result.playerHpLeft}/${stats.maxHp}**`,
+        inline: false,
+      },
+      { name: '⚡ Energia Restante', value: `**${result.playerEnergyLeft}/${stats.maxEnergy}**`, inline: true },
     );
 
   if (result.itemsDropped.length > 0) {
-    embed.addFields({ name: '🎁 Itens Obtidos', value: result.itemsDropped.map(id => getItem(id)?.name ?? id).join(', ') });
+    const dropText = result.itemsDropped.map(id => {
+      const item = getItem(id);
+      return item ? `${item.emoji} **${item.name}**` : id;
+    }).join('  •  ');
+    embed.addFields({ name: `🎁 ${result.itemsDropped.length} Item(ns) Obtido(s)!`, value: dropText });
   }
 
   // Aplicar template customizável (se existir)
   const tplKey = result.result === 'vitoria' ? 'combat.victory' : result.result === 'derrota' ? 'combat.defeat' : 'combat.draw';
   applyTemplate(embed, tplKey);
 
-  const rows = [
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('rpg:dungeon_aleatorio').setLabel('⚡ Batalhar Novamente').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('◀ Dungeons').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rpg:perfil').setLabel('👤 Perfil').setStyle(ButtonStyle.Secondary),
+  const combatBtns = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('rpg:dungeon_aleatorio')
+      .setLabel('⚡ Batalhar Novamente')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(result.playerHpLeft <= 0),
+    ...(hpCritical
+      ? [new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏥 Ir se Curar!').setStyle(ButtonStyle.Success)]
+      : [new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Escolher Inimigo').setStyle(ButtonStyle.Secondary)]
     ),
-  ];
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('👤 Perfil').setStyle(ButtonStyle.Secondary),
+  );
 
+  const rows = [combatBtns];
   return { embed, rows };
 }
