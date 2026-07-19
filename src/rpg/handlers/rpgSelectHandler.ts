@@ -256,7 +256,8 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
       case 'worldboss_template': {
         await i.deferUpdate();
         const templateIndex = parseInt(i.values[0], 10);
-        const { buildWorldBossLevelSelect, WORLD_BOSS_TEMPLATES } = await import('../panels/worldBoss');
+        const { buildWorldBossLevelSelect } = await import('../panels/worldBoss');
+        const { WORLD_BOSS_TEMPLATES } = await import('../services/worldBoss');
         const { EmbedBuilder } = await import('discord.js');
         const template = WORLD_BOSS_TEMPLATES[templateIndex];
         const step2Embed = new EmbedBuilder()

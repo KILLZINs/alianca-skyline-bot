@@ -2,7 +2,7 @@
 // HANDLER DE BOTÕES RPG
 // ═══════════════════════════════════════════════════════════════════════
 
-import { ButtonInteraction, PermissionFlagsBits } from 'discord.js';
+import { ButtonInteraction, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { prisma } from '../../database/client';
 import { getOrCreateCharacter, computeStats, getCharacter, applyPassiveEnergyRegen } from '../services/character';
 import { buildProfileEmbed, buildProfileButtons, buildCidadeEmbed, buildCidadeButtons, buildCidadeButtons2, buildPontosEmbed, buildPontosSelect } from '../panels/profile';
@@ -440,7 +440,6 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
       case 'casamento_divorciar_confirmar': {
         await i.deferUpdate();
         const { buildDivorceConfirmEmbed } = await import('../panels/marriage');
-        const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
         const confirmRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder().setCustomId('rpg:casamento_divorciar_executar').setLabel('💔 Confirmar Divórcio').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('rpg:casamento').setLabel('❌ Cancelar').setStyle(ButtonStyle.Secondary),
