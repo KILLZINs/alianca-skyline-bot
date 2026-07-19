@@ -627,3 +627,27 @@ model EmbedTemplate {
 
   @@map("embed_templates")
 }
+
+model SelfRoleMenu {
+  id          String          @id @default(cuid())
+  guildId     String
+  channelId   String
+  messageId   String?
+  title       String          @default("📋 Registro de Cargos")
+  description String?
+  entries     SelfRoleEntry[]
+  createdAt   DateTime        @default(now())
+
+  @@map("self_role_menus")
+}
+
+model SelfRoleEntry {
+  id     String       @id @default(cuid())
+  menuId String
+  menu   SelfRoleMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  roleId String
+  label  String
+  emoji  String?
+
+  @@map("self_role_entries")
+}

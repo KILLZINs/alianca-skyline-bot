@@ -7,14 +7,9 @@ import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed, rankEmoji } from '
 import { checkAdmin, checkModerator } from '../utils/permissions';
 import { RANKS, xpForNextLevel } from '../types';
 import { isBotManager, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager, allowedGuildCount } from '../utils/allowlist';
+import { sendLog, LOG } from '../utils/logger';
 
 function resolveId(s: string) { return s.replace(/[<@!>&]/g, '').trim(); }
-
-async function sendLog(guild: any, channelId: string | null | undefined, embed: EmbedBuilder) {
-  if (!channelId) return;
-  const ch = guild.channels.cache.get(channelId) as TextChannel | undefined;
-  if (ch) await ch.send({ embeds: [embed] }).catch(() => null);
-}
 
 export async function handleModal(i: ModalSubmitInteraction) {
   const parts = i.customId.split(':');
@@ -25,6 +20,7 @@ export async function handleModal(i: ModalSubmitInteraction) {
   try {
     // Mod modals
     if (prefix === 'mod_modal') return await handleModModal(i, action);
+    if (prefix === 'cargo_menu') return await handleCargoMenu(i, action, parts);
 
     // Config modals
     if (prefix === 'modal' && action === 'config') return await handleConfigModal(i, extra[0]);
@@ -72,7 +68,6 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
   if (!(await checkModerator(i))) return;
   await i.deferReply({ ephemeral: true });
   const guild = i.guild!;
-  const config = await getConfig(guild.id);
 
   const getField = (id: string, required = false) => {
     try { return i.fields.getTextInputValue(id) || null; } catch { return null; }
@@ -86,7 +81,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
       await guild.bans.create(userId, { reason: `${i.user.tag}: ${motivo}`, deleteMessageSeconds: dias * 86400 });
-      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
       await i.editReply({ embeds: [successEmbed('Banido!', `**${member.user.tag}** foi banido.\nMotivo: ${motivo}`)] });
     } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
@@ -98,7 +93,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
       await member.kick(`${i.user.tag}: ${motivo}`);
-      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle(`👟 Membro Expulso`).addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.WARNING).setTitle(`👟 Membro Expulso`).addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
       await i.editReply({ embeds: [successEmbed('Expulso!', `**${member.user.tag}** foi expulso.\nMotivo: ${motivo}`)] });
     } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
@@ -113,7 +108,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
       await member.timeout(ms, `${i.user.tag}: ${motivo}`);
-      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle(`🔇 Membro Mutado`).addFields({ name: 'Usuário', value: member.user.tag, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Duração', value: duracaoStr, inline: true }, { name: 'Motivo', value: motivo }));
+      await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.WARNING).setTitle(`🔇 Membro Mutado`).addFields({ name: 'Usuário', value: member.user.tag, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Duração', value: duracaoStr, inline: true }, { name: 'Motivo', value: motivo }));
       await i.editReply({ embeds: [successEmbed('Mutado!', `**${member.user.tag}** foi mutado por **${duracaoStr}**.\nMotivo: ${motivo}`)] });
     } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
@@ -124,6 +119,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
       await member.timeout(null);
+      await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.SUCCESS).setTitle('🔊 Timeout Removido').addFields({ name: '👤 Usuário', value: `${member.user.tag} (${member.id})`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }));
       await i.editReply({ embeds: [successEmbed('Desmutado!', `**${member.user.tag}** foi desmutado.`)] });
     } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
@@ -136,7 +132,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     await prisma.warn.create({ data: { memberId: userId, guildId: guild.id, moderator: i.user.id, reason: motivo } });
     await prisma.member.upsert({ where: { discordId: userId }, update: { warnings: { increment: 1 } }, create: { discordId: userId, username: member.user.username, warnings: 1 } });
     const total = await prisma.warn.count({ where: { memberId: userId, guildId: guild.id } });
-    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Total avisos', value: `${total}`, inline: true }, { name: 'Motivo', value: motivo }));
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Total avisos', value: `${total}`, inline: true }, { name: 'Motivo', value: motivo }));
     await i.editReply({ embeds: [successEmbed('Advertido!', `**${member.user.tag}** advertido. Total: **${total}** aviso(s).\nMotivo: ${motivo}`)] });
   }
 
@@ -153,6 +149,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     const qtd = Math.min(100, Math.max(1, parseInt(getField('quantidade', true)!) || 10));
     const channel = i.channel as TextChannel;
     const deleted = await channel.bulkDelete(qtd, true);
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.ERROR).setTitle('🗑️ Purge de Mensagens').addFields({ name: '📢 Canal', value: `<#${channel.id}>`, inline: true }, { name: '🔢 Apagadas', value: `${deleted.size}`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }));
     await i.editReply({ embeds: [successEmbed('Mensagens Apagadas', `**${deleted.size}** mensagem(ns) apagada(s).`)] });
   }
 
@@ -161,7 +158,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     const motivo = getField('motivo') ?? 'Sem motivo';
     try {
       await guild.bans.remove(userId, `${i.user.tag}: ${motivo}`);
-      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.SUCCESS).setTitle('🚫 Membro Desbanido').addFields({ name: 'ID', value: userId, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.SUCCESS).setTitle('🚫 Membro Desbanido').addFields({ name: 'ID', value: userId, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
       await i.editReply({ embeds: [successEmbed('Desbanido!', `O usuário **${userId}** foi desbanido.`)] });
     } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível desbanir: ${err}`)] }); }
   }
@@ -173,6 +170,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     if (!lastWarn) return i.editReply({ embeds: [errorEmbed('Sem avisos', 'Este usuário não tem avisos.')] });
     await prisma.warn.delete({ where: { id: lastWarn.id } });
     await prisma.member.updateMany({ where: { discordId: userId, warnings: { gt: 0 } }, data: { warnings: { decrement: 1 } } });
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.INFO).setTitle('🔄 Aviso Removido').addFields({ name: '👤 Membro', value: `${member?.user.tag ?? userId}`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }, { name: '📋 Aviso removido', value: lastWarn.reason, inline: false }));
     await i.editReply({ embeds: [successEmbed('Aviso Removido', `Último aviso de **${member?.user.tag ?? userId}** removido.`)] });
   }
 
@@ -180,6 +178,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     const segundos = Math.min(21600, Math.max(0, parseInt(getField('segundos', true)!) || 0));
     const channel = i.channel as TextChannel;
     await channel.setRateLimitPerUser(segundos);
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.INFO).setTitle('🐢 Slowmode Alterado').addFields({ name: '📢 Canal', value: `<#${channel.id}>`, inline: true }, { name: '⏱️ Valor', value: segundos === 0 ? 'Desativado' : `${segundos}s`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }));
     await i.editReply({ embeds: [successEmbed('Slowmode', segundos === 0 ? 'Slowmode desativado.' : `Slowmode definido para **${segundos}s**.`)] });
   }
 
@@ -188,6 +187,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     const channel = i.channel as TextChannel;
     await channel.permissionOverwrites.edit(guild.id, { SendMessages: false });
     await channel.send({ embeds: [baseEmbed(COLORS.ERROR).setDescription(`${EMOJIS.LOCK} Canal trancado por ${i.user}.\nMotivo: ${motivo}`)] });
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.ERROR).setTitle('🔒 Canal Trancado').addFields({ name: '📢 Canal', value: `<#${channel.id}>`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }, { name: '📋 Motivo', value: motivo, inline: false }));
     await i.editReply({ embeds: [successEmbed('Canal Trancado', `Membros não podem mais enviar mensagens.`)] });
   }
 
@@ -196,6 +196,7 @@ async function handleModModal(i: ModalSubmitInteraction, action: string) {
     const channel = i.channel as TextChannel;
     await channel.permissionOverwrites.edit(guild.id, { SendMessages: null });
     await channel.send({ embeds: [baseEmbed(COLORS.SUCCESS).setDescription(`${EMOJIS.UNLOCK} Canal destrancado por ${i.user}.\nMotivo: ${motivo}`)] });
+    await sendLog(guild, LOG.MODERATION, baseEmbed(COLORS.SUCCESS).setTitle('🔓 Canal Destrancado').addFields({ name: '📢 Canal', value: `<#${channel.id}>`, inline: true }, { name: '🔨 Moderador', value: i.user.tag, inline: true }, { name: '📋 Motivo', value: motivo, inline: false }));
     await i.editReply({ embeds: [successEmbed('Canal Destrancado', `Membros podem enviar mensagens novamente.`)] });
   }
 }
@@ -664,4 +665,64 @@ async function transferirMoedas(i: ModalSubmitInteraction) {
     prisma.member.update({ where: { discordId: userId }, data: { coins: { increment: quantidade } } }),
   ]);
   await i.editReply({ embeds: [successEmbed('Transferência Realizada!', `${EMOJIS.COINS} **${quantidade}** moedas enviadas para ${target}.\nNovo saldo: **${remetente.coins - quantidade}** moedas.`)] });
+}
+
+// ── Cargo Menu — criar e adicionar cargos ────────────────────────────────────
+async function handleCargoMenu(i: ModalSubmitInteraction, action: string, parts: string[]) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+
+  const guildId   = i.guildId!;
+  const channelId = i.channelId;
+
+  if (action === 'criar') {
+    const titulo   = i.fields.getTextInputValue('titulo').trim();
+    const descricao = (() => { try { return i.fields.getTextInputValue('descricao').trim() || null; } catch { return null; } })();
+
+    await prisma.selfRoleMenu.create({
+      data: { guildId, channelId, title: titulo, description: descricao },
+    });
+
+    return i.editReply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle('✅ Menu Criado!')
+        .setDescription(
+          `Menu **${titulo}** criado neste canal.\n\n` +
+          `Use \`/cargo-menu adicionar-cargo\` para adicionar cargos ao menu,\n` +
+          `depois \`/cargo-menu publicar\` para enviar a mensagem ao canal.`
+        )
+      ],
+    });
+  }
+
+  if (action === 'adicionar') {
+    const menuId = parts[2];
+    const rawId  = i.fields.getTextInputValue('role_id').trim().replace(/[<@&>]/g, '');
+    const label  = i.fields.getTextInputValue('label').trim();
+    const emoji  = (() => { try { return i.fields.getTextInputValue('emoji').trim() || null; } catch { return null; } })();
+
+    if (!/^\d{17,20}$/.test(rawId)) {
+      return i.editReply({ embeds: [errorEmbed('ID Inválido', 'Informe o ID numérico do cargo (17-20 dígitos).')] });
+    }
+
+    const role = i.guild?.roles.cache.get(rawId);
+    if (!role) {
+      return i.editReply({ embeds: [errorEmbed('Cargo não encontrado', `O cargo \`${rawId}\` não existe neste servidor.`)] });
+    }
+
+    await prisma.selfRoleEntry.create({ data: { menuId, roleId: rawId, label, emoji } });
+
+    const count = await prisma.selfRoleEntry.count({ where: { menuId } });
+    return i.editReply({
+      embeds: [new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle('✅ Cargo Adicionado!')
+        .setDescription(
+          `${emoji ?? '🏷️'} **${label}** → ${role} adicionado ao menu.\n` +
+          `Total: **${count}** cargo(s). Use \`/cargo-menu publicar\` para atualizar o menu.`
+        )
+      ],
+    });
+  }
 }

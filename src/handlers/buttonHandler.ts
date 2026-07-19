@@ -39,6 +39,7 @@ export async function handleButton(interaction: ButtonInteraction) {
       case 'embedcfg':  return await (await import('./configHandler')).handleEmbedCfgButton(interaction, action);
       case 'embeds':    return await (await import('./embedsHandler')).handleEmbedsButtonRaw(interaction);
       case 'logs':      return await (await import('./logsHandler')).handleLogsButton(interaction, action);
+      case 'selfrole':  return await selfRoleToggle(interaction, extra);
     }
   } catch (err) {
     console.error('Button error:', err);
@@ -1065,6 +1066,39 @@ async function rpgwipeButtons(interaction: ButtonInteraction, action: string) {
           .setFooter({ text: `Executado por ${interaction.user.username}` })
           .setTimestamp(),
       ],
+    });
+  }
+}
+
+// ── Selfrole — toggle de cargo por botão ────────────────────────────────────
+async function selfRoleToggle(i: ButtonInteraction, extra: string[]) {
+  const [roleId] = extra;
+  await i.deferReply({ ephemeral: true });
+
+  const member = i.member as GuildMember;
+  if (!member) return i.editReply({ embeds: [errorEmbed('Erro', 'Não foi possível verificar seu perfil.')] });
+
+  const role = i.guild?.roles.cache.get(roleId);
+  if (!role) return i.editReply({ embeds: [errorEmbed('Cargo Inválido', 'Este cargo não existe mais no servidor.')] });
+
+  const hasRole = member.roles.cache.has(roleId);
+  try {
+    if (hasRole) {
+      await member.roles.remove(roleId);
+      return i.editReply({
+        embeds: [new EmbedBuilder().setColor(0xE74C3C)
+          .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`)],
+      });
+    } else {
+      await member.roles.add(roleId);
+      return i.editReply({
+        embeds: [new EmbedBuilder().setColor(0x2ECC71)
+          .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`)],
+      });
+    }
+  } catch {
+    return i.editReply({
+      embeds: [errorEmbed('Sem Permissão', 'Não foi possível alterar o cargo. Verifique se o bot tem permissão de gerenciar cargos.')],
     });
   }
 }
