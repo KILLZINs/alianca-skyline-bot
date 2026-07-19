@@ -67,9 +67,10 @@ export async function buildInventarioEmbed(char: FullCharacter): Promise<{
 
 export function buildInventarioButtons(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:inventario').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:loja').setLabel('🛒 Loja').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(ButtonStyle.Secondary),
   );
 }
 
