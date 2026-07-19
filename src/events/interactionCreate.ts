@@ -4,12 +4,27 @@ import { errorEmbed } from '../utils/embeds';
 import { handleButton } from '../handlers/buttonHandler';
 import { handleSelect } from '../handlers/selectHandler';
 import { handleModal } from '../handlers/modalHandler';
+import { isGuildAllowed, isEnforcementActive } from '../utils/allowlist';
 
 export default {
   name: 'interactionCreate',
   once: false,
   async execute(interaction: Interaction, client: ExtendedClient) {
-    // ── Slash commands ──────────────────────────────────────────────
+    // ── Allowlist guard ──────────────────────────────────────────────────────
+    // /botadmin sempre passa (dono precisa usá-lo mesmo de servidores não autorizados)
+    const isBotAdmin = interaction.isChatInputCommand() && interaction.commandName === 'botadmin';
+    if (interaction.guildId && !isBotAdmin && !isGuildAllowed(interaction.guildId)) {
+      if (interaction.isChatInputCommand()) {
+        await interaction.reply({
+          embeds: [errorEmbed('Servidor Não Autorizado', 'Este servidor não está na allowlist do bot.\nContacte o dono do bot para solicitar acesso.')],
+          ephemeral: true,
+        });
+      }
+      // Botões/modais/selects: silenciosamente ignorar
+      return;
+    }
+
+    // ── Slash commands ───────────────────────────────────────────────────────
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -50,19 +65,19 @@ export default {
       return;
     }
 
-    // ── Buttons ─────────────────────────────────────────────────────
+    // ── Buttons ──────────────────────────────────────────────────────────────
     if (interaction.isButton()) {
       await handleButton(interaction);
       return;
     }
 
-    // ── Select menus ─────────────────────────────────────────────────
+    // ── Select menus ─────────────────────────────────────────────────────────
     if (interaction.isStringSelectMenu()) {
       await handleSelect(interaction);
       return;
     }
 
-    // ── Modals ───────────────────────────────────────────────────────
+    // ── Modals ───────────────────────────────────────────────────────────────
     if (interaction.isModalSubmit()) {
       await handleModal(interaction);
       return;

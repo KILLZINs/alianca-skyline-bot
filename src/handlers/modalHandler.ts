@@ -1,35 +1,60 @@
 import {
-  ModalSubmitInteraction, TextChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder,
+  ModalSubmitInteraction, TextChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, GuildMember,
 } from 'discord.js';
 import { prisma } from '../database/client';
-import { getConfig, parseDuration } from '../utils/helpers';
+import { getConfig, parseDuration, formatDuration, getOrCreateMember } from '../utils/helpers';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed, rankEmoji } from '../utils/embeds';
 import { checkAdmin, checkModerator } from '../utils/permissions';
-import { RANKS } from '../types';
+import { RANKS, xpForNextLevel } from '../types';
+import { isBotManager, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager, allowedGuildCount } from '../utils/allowlist';
 
 function resolveId(s: string) { return s.replace(/[<@!>&]/g, '').trim(); }
 
+async function sendLog(guild: any, channelId: string | null | undefined, embed: EmbedBuilder) {
+  if (!channelId) return;
+  const ch = guild.channels.cache.get(channelId) as TextChannel | undefined;
+  if (ch) await ch.send({ embeds: [embed] }).catch(() => null);
+}
+
 export async function handleModal(i: ModalSubmitInteraction) {
   const parts = i.customId.split(':');
+  const prefix = parts[0];
   const action = parts[1];
   const extra = parts.slice(2);
+
   try {
-    switch (action) {
-      case 'ban':     return await modBan(i);
-      case 'kick':    return await modKick(i);
-      case 'mute':    return await modMute(i);
-      case 'unmute':  return await modUnmute(i);
-      case 'warn':    return await modWarn(i);
-      case 'warns':   return await modWarns(i);
-      case 'anuncio': return await sendAnuncio(i);
-      case 'config':  return await updateConfig(i, extra[0]);
-      case 'poll':    return await createPoll(i);
-      case 'evento':  return await createEvento(i);
-      case 'sorteio': return await createSorteio(i);
-      case 'rank':            return await setRank(i);
-      case 'feedbacksubmit':  return await sendFeedbackMsg(i);
-      case 'sugestaosubmit':  return await sendSugestaoMsg(i);
+    // Mod modals
+    if (prefix === 'mod_modal') return await handleModModal(i, action);
+
+    // Config modals
+    if (prefix === 'modal' && action === 'config') return await handleConfigModal(i, extra[0]);
+
+    // Other modals
+    switch (`${prefix}:${action}`) {
+      case 'modal:anuncio':         return await sendAnuncio(i);
+      case 'modal:poll':            return await createPoll(i);
+      case 'modal:sorteio':         return await createSorteio(i);
+      case 'modal:encerrar_sorteio': return await encerrarSorteio(i);
+      case 'modal:evento':          return await createEvento(i);
+      case 'modal:conquista':       return await gerenciarConquista(i);
+      case 'modal:nivel_reward':    return await setNivelReward(i);
+      case 'modal:admin_economia':  return await adminEconomia(i);
+      case 'modal:admin_loja':      return await adminLoja(i);
+      case 'modal:rank':            return await setRank(i);
+      case 'modal:sugestaosubmit':  return await sendSugestao(i);
+      case 'modal:feedbacksubmit':  return await sendFeedback(i);
+      case 'modal:transferir':             return await transferirMoedas(i);
+      case 'modal:allowlist_add_guild':    return await allowlistAddGuild(i);
+      case 'modal:allowlist_remove_guild': return await allowlistRemoveGuild(i);
+      case 'modal:allowlist_add_manager':  return await allowlistAddManager(i);
+      case 'modal:allowlist_remove_manager': return await allowlistRemoveManager(i);
+      case 'rpg_modal:guild_criar': return await (await import('./../rpg/handlers/rpgModalHandler')).handleRpgModal(i, 'guild_criar');
     }
+    // Alliance modals
+    if (prefix === 'alliance_modal') return await (await import('./allianceHandler')).handleAllianceModal(i, action);
+    if (prefix === 'servidor_modal')  return await (await import('./allianceHandler')).handleServidorModal(i, action);
+    if (prefix === 'embedcfg_modal')  return await (await import('./configHandler')).handleEmbedCfgModal(i, action);
+    if (prefix === 'embeds_modal')    return await (await import('./embedsHandler')).handleEmbedsModal(i);
   } catch (err) {
     console.error('Modal error:', err);
     const e = errorEmbed('Erro', 'Ocorreu um erro ao processar este formulário.');
@@ -40,144 +65,210 @@ export async function handleModal(i: ModalSubmitInteraction) {
   }
 }
 
-// ─── MODERATION ───────────────────────────────────────────────────────────────
+// ─── MOD MODALS ───────────────────────────────────────────────────────────────
 
-async function modBan(i: ModalSubmitInteraction) {
+async function handleModModal(i: ModalSubmitInteraction, action: string) {
   if (!(await checkModerator(i))) return;
   await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const motivo = i.fields.getTextInputValue('motivo');
-  const dias = Math.min(7, Math.max(0, parseInt(i.fields.getTextInputValue('dias') || '0') || 0));
   const guild = i.guild!;
-  try {
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado no servidor.')] });
-    await guild.bans.create(userId, { reason: `${i.user.tag}: ${motivo}`, deleteMessageSeconds: dias * 86400 });
-    const config = await getConfig(guild.id);
-    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
-    await i.editReply({ embeds: [successEmbed('Banido!', `**${member.user.tag}** foi banido.\nMotivo: ${motivo}`)] });
-  } catch (err) {
-    await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível banir: ${err}`)] });
+  const config = await getConfig(guild.id);
+
+  const getField = (id: string, required = false) => {
+    try { return i.fields.getTextInputValue(id) || null; } catch { return null; }
+  };
+
+  if (action === 'ban') {
+    const userId = resolveId(getField('usuario', true)!);
+    const motivo = getField('motivo', true)!;
+    const dias = Math.min(7, Math.max(0, parseInt(getField('dias') ?? '0') || 0));
+    try {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+      await guild.bans.create(userId, { reason: `${i.user.tag}: ${motivo}`, deleteMessageSeconds: dias * 86400 });
+      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await i.editReply({ embeds: [successEmbed('Banido!', `**${member.user.tag}** foi banido.\nMotivo: ${motivo}`)] });
+    } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
-}
 
-async function modKick(i: ModalSubmitInteraction) {
-  if (!(await checkModerator(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const motivo = i.fields.getTextInputValue('motivo');
-  const guild = i.guild!;
-  try {
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado no servidor.')] });
-    await member.kick(`${i.user.tag}: ${motivo}`);
-    const config = await getConfig(guild.id);
-    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('🥾 Membro Expulso').addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
-    await i.editReply({ embeds: [successEmbed('Expulso!', `**${member.user.tag}** foi expulso.\nMotivo: ${motivo}`)] });
-  } catch (err) {
-    await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível expulsar: ${err}`)] });
+  else if (action === 'kick') {
+    const userId = resolveId(getField('usuario', true)!);
+    const motivo = getField('motivo', true)!;
+    try {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+      await member.kick(`${i.user.tag}: ${motivo}`);
+      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle(`👟 Membro Expulso`).addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await i.editReply({ embeds: [successEmbed('Expulso!', `**${member.user.tag}** foi expulso.\nMotivo: ${motivo}`)] });
+    } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
-}
 
-async function modMute(i: ModalSubmitInteraction) {
-  if (!(await checkModerator(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const duracaoStr = i.fields.getTextInputValue('duracao');
-  const motivo = i.fields.getTextInputValue('motivo');
-  const ms = parseDuration(duracaoStr);
-  if (!ms) return i.editReply({ embeds: [errorEmbed('Duração Inválida', 'Use formatos como `1h`, `30m`, `1d`.')] });
-  const guild = i.guild!;
-  try {
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado no servidor.')] });
-    await member.timeout(ms, `${i.user.tag}: ${motivo}`);
-    const config = await getConfig(guild.id);
-    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.INFO).setTitle('🔇 Membro Mutado').addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Duração', value: duracaoStr, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
-    await i.editReply({ embeds: [successEmbed('Mutado!', `**${member.user.tag}** foi mutado por ${duracaoStr}.\nMotivo: ${motivo}`)] });
-  } catch (err) {
-    await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível mutar: ${err}`)] });
+  else if (action === 'mute') {
+    const userId = resolveId(getField('usuario', true)!);
+    const duracaoStr = getField('duracao', true)!;
+    const motivo = getField('motivo') ?? 'Sem motivo';
+    const ms = parseDuration(duracaoStr);
+    if (!ms) return i.editReply({ embeds: [errorEmbed('Duração inválida', 'Use formatos como: 10m, 1h, 1d')] });
+    try {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+      await member.timeout(ms, `${i.user.tag}: ${motivo}`);
+      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle(`🔇 Membro Mutado`).addFields({ name: 'Usuário', value: member.user.tag, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Duração', value: duracaoStr, inline: true }, { name: 'Motivo', value: motivo }));
+      await i.editReply({ embeds: [successEmbed('Mutado!', `**${member.user.tag}** foi mutado por **${duracaoStr}**.\nMotivo: ${motivo}`)] });
+    } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
-}
 
-async function modUnmute(i: ModalSubmitInteraction) {
-  if (!(await checkModerator(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const guild = i.guild!;
-  try {
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado no servidor.')] });
-    await member.timeout(null);
-    await i.editReply({ embeds: [successEmbed('Desmutado!', `**${member.user.tag}** foi desmutado.`)] });
-  } catch (err) {
-    await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível desmutar: ${err}`)] });
+  else if (action === 'unmute') {
+    const userId = resolveId(getField('usuario', true)!);
+    try {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+      await member.timeout(null);
+      await i.editReply({ embeds: [successEmbed('Desmutado!', `**${member.user.tag}** foi desmutado.`)] });
+    } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `${err}`)] }); }
   }
-}
 
-async function modWarn(i: ModalSubmitInteraction) {
-  if (!(await checkModerator(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const motivo = i.fields.getTextInputValue('motivo');
-  const guild = i.guild!;
-  try {
+  else if (action === 'warn') {
+    const userId = resolveId(getField('usuario', true)!);
+    const motivo = getField('motivo', true)!;
     const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado no servidor.')] });
-    await prisma.warn.create({ data: { memberId: userId, moderator: i.user.id, reason: motivo, guildId: guild.id } });
+    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+    await prisma.warn.create({ data: { memberId: userId, guildId: guild.id, moderator: i.user.id, reason: motivo } });
     await prisma.member.upsert({ where: { discordId: userId }, update: { warnings: { increment: 1 } }, create: { discordId: userId, username: member.user.username, warnings: 1 } });
-    const totalWarns = await prisma.warn.count({ where: { memberId: userId, guildId: guild.id } });
-    const config = await getConfig(guild.id);
-    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${member.user.tag} (${userId})`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Total de avisos', value: `${totalWarns}`, inline: true }, { name: 'Motivo', value: motivo }));
-    await i.editReply({ embeds: [successEmbed('Advertido!', `**${member.user.tag}** foi advertido (total: ${totalWarns} aviso${totalWarns !== 1 ? 's' : ''}).\nMotivo: ${motivo}`)] });
-  } catch (err) {
-    await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível advertir: ${err}`)] });
+    const total = await prisma.warn.count({ where: { memberId: userId, guildId: guild.id } });
+    await sendLog(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${member.user.tag}`, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Total avisos', value: `${total}`, inline: true }, { name: 'Motivo', value: motivo }));
+    await i.editReply({ embeds: [successEmbed('Advertido!', `**${member.user.tag}** advertido. Total: **${total}** aviso(s).\nMotivo: ${motivo}`)] });
+  }
+
+  else if (action === 'warns') {
+    const userId = resolveId(getField('usuario', true)!);
+    const member = await guild.members.fetch(userId).catch(() => null);
+    const warns = await prisma.warn.findMany({ where: { memberId: userId, guildId: guild.id }, orderBy: { createdAt: 'desc' }, take: 10 });
+    if (!warns.length) return i.editReply({ embeds: [baseEmbed().setTitle('📋 Avisos').setDescription(`${member?.user.tag ?? userId} não tem avisos.`)] });
+    const list = warns.map((w, idx) => `**${idx + 1}.** ${w.reason} — <@${w.moderator}> — <t:${Math.floor(w.createdAt.getTime() / 1000)}:R>`).join('\n');
+    await i.editReply({ embeds: [baseEmbed(COLORS.WARNING).setTitle(`⚠️ Avisos — ${member?.user.tag ?? userId}`).setDescription(list).setFooter({ text: `${warns.length} aviso(s) recentes` })] });
+  }
+
+  else if (action === 'limpar') {
+    const qtd = Math.min(100, Math.max(1, parseInt(getField('quantidade', true)!) || 10));
+    const channel = i.channel as TextChannel;
+    const deleted = await channel.bulkDelete(qtd, true);
+    await i.editReply({ embeds: [successEmbed('Mensagens Apagadas', `**${deleted.size}** mensagem(ns) apagada(s).`)] });
+  }
+
+  else if (action === 'unban') {
+    const userId = resolveId(getField('usuario', true)!);
+    const motivo = getField('motivo') ?? 'Sem motivo';
+    try {
+      await guild.bans.remove(userId, `${i.user.tag}: ${motivo}`);
+      await sendLog(guild, config.logChannelId, baseEmbed(COLORS.SUCCESS).setTitle('🚫 Membro Desbanido').addFields({ name: 'ID', value: userId, inline: true }, { name: 'Moderador', value: i.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+      await i.editReply({ embeds: [successEmbed('Desbanido!', `O usuário **${userId}** foi desbanido.`)] });
+    } catch (err) { await i.editReply({ embeds: [errorEmbed('Erro', `Não foi possível desbanir: ${err}`)] }); }
+  }
+
+  else if (action === 'remover_warn') {
+    const userId = resolveId(getField('usuario', true)!);
+    const member = await guild.members.fetch(userId).catch(() => null);
+    const lastWarn = await prisma.warn.findFirst({ where: { memberId: userId, guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    if (!lastWarn) return i.editReply({ embeds: [errorEmbed('Sem avisos', 'Este usuário não tem avisos.')] });
+    await prisma.warn.delete({ where: { id: lastWarn.id } });
+    await prisma.member.updateMany({ where: { discordId: userId, warnings: { gt: 0 } }, data: { warnings: { decrement: 1 } } });
+    await i.editReply({ embeds: [successEmbed('Aviso Removido', `Último aviso de **${member?.user.tag ?? userId}** removido.`)] });
+  }
+
+  else if (action === 'slowmode') {
+    const segundos = Math.min(21600, Math.max(0, parseInt(getField('segundos', true)!) || 0));
+    const channel = i.channel as TextChannel;
+    await channel.setRateLimitPerUser(segundos);
+    await i.editReply({ embeds: [successEmbed('Slowmode', segundos === 0 ? 'Slowmode desativado.' : `Slowmode definido para **${segundos}s**.`)] });
+  }
+
+  else if (action === 'lock') {
+    const motivo = getField('motivo') ?? 'Sem motivo';
+    const channel = i.channel as TextChannel;
+    await channel.permissionOverwrites.edit(guild.id, { SendMessages: false });
+    await channel.send({ embeds: [baseEmbed(COLORS.ERROR).setDescription(`${EMOJIS.LOCK} Canal trancado por ${i.user}.\nMotivo: ${motivo}`)] });
+    await i.editReply({ embeds: [successEmbed('Canal Trancado', `Membros não podem mais enviar mensagens.`)] });
+  }
+
+  else if (action === 'unlock') {
+    const motivo = getField('motivo') ?? 'Sem motivo';
+    const channel = i.channel as TextChannel;
+    await channel.permissionOverwrites.edit(guild.id, { SendMessages: null });
+    await channel.send({ embeds: [baseEmbed(COLORS.SUCCESS).setDescription(`${EMOJIS.UNLOCK} Canal destrancado por ${i.user}.\nMotivo: ${motivo}`)] });
+    await i.editReply({ embeds: [successEmbed('Canal Destrancado', `Membros podem enviar mensagens novamente.`)] });
   }
 }
 
-async function modWarns(i: ModalSubmitInteraction) {
-  if (!(await checkModerator(i))) return;
+// ─── CONFIG MODALS ────────────────────────────────────────────────────────────
+
+async function handleConfigModal(i: ModalSubmitInteraction, section: string) {
+  if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
-  const userId = resolveId(i.fields.getTextInputValue('usuario'));
   const guild = i.guild!;
-  const member = await guild.members.fetch(userId).catch(() => null);
-  const warns = await prisma.warn.findMany({ where: { memberId: userId, guildId: guild.id }, orderBy: { createdAt: 'desc' }, take: 10 });
-  if (!warns.length) return i.editReply({ embeds: [baseEmbed().setTitle('📋 Avisos').setDescription(`${member?.user.tag ?? userId} não tem avisos.`)] });
-  const list = warns.map((w, idx) => `**${idx + 1}.** ${w.reason} — <@${w.moderator}> — <t:${Math.floor(w.createdAt.getTime() / 1000)}:R>`).join('\n');
-  await i.editReply({ embeds: [baseEmbed(COLORS.WARNING).setTitle(`⚠️ Avisos de ${member?.user.tag ?? userId}`).setDescription(list)] });
+
+  const getField = (id: string) => { try { return i.fields.getTextInputValue(id).trim() || null; } catch { return null; } };
+
+  if (section === 'channels') {
+    const data: Record<string, string | null> = {
+      logChannelId: getField('log'),
+      welcomeChannelId: getField('welcome'),
+      levelUpChannelId: getField('levelup'),
+      suggestionChannelId: getField('suggestion'),
+      ticketLogChannelId: getField('ticket_log'),
+    };
+    const update: any = {};
+    for (const [k, v] of Object.entries(data)) if (v !== null) update[k] = v;
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update, create: { guildId: guild.id, ...update } });
+    await i.editReply({ embeds: [successEmbed('Canais Atualizados', 'Configurações de canais salvas com sucesso.')] });
+  }
+
+  else if (section === 'roles') {
+    const data: any = {};
+    const admin = getField('admin'); if (admin) data.adminRoleId = admin;
+    const mod = getField('mod');   if (mod)   data.modRoleId = mod;
+    const mem = getField('member');if (mem)   data.memberRoleId = mem;
+    const auto = getField('auto'); if (auto)  data.autoRoleId = auto;
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: data, create: { guildId: guild.id, ...data } });
+    await i.editReply({ embeds: [successEmbed('Cargos Atualizados', 'Configurações de cargos salvas.')] });
+  }
+
+  else if (section === 'xp') {
+    const data: any = {};
+    const min = parseInt(getField('xp_min') ?? '');  if (!isNaN(min)) data.xpMin = Math.max(1, min);
+    const max = parseInt(getField('xp_max') ?? '');  if (!isNaN(max)) data.xpMax = Math.max(1, max);
+    const cd = parseInt(getField('cooldown') ?? ''); if (!isNaN(cd))  data.xpCooldown = Math.max(0, cd);
+    const spam = getField('antispam');   if (spam !== null) data.antiSpam = spam.toLowerCase() === 'true';
+    const links = getField('antilinks'); if (links !== null) data.antiLinks = links.toLowerCase() === 'true';
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: data, create: { guildId: guild.id, ...data } });
+    await i.editReply({ embeds: [successEmbed('XP Atualizado', 'Configurações de XP e proteções salvas.')] });
+  }
+
+  else if (section === 'welcome') {
+    const msg = getField('mensagem');
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { welcomeMessage: msg }, create: { guildId: guild.id, welcomeMessage: msg } });
+    await i.editReply({ embeds: [successEmbed('Mensagem Atualizada', msg ? `Nova mensagem: ${msg}` : 'Mensagem padrão restaurada.')] });
+  }
 }
 
-// ─── ANUNCIO ──────────────────────────────────────────────────────────────────
+// ─── ANÚNCIO ──────────────────────────────────────────────────────────────────
 
 async function sendAnuncio(i: ModalSubmitInteraction) {
   if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
   const titulo = i.fields.getTextInputValue('titulo');
   const mensagem = i.fields.getTextInputValue('mensagem');
+  const canalId = i.fields.getTextInputValue('canal').trim() || null;
   const config = await getConfig(i.guild!.id);
-  const channelId = config.announcementChannelId;
-  if (!channelId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Configure o canal de anúncios em `/config`.')] });
-  const channel = i.guild!.channels.cache.get(channelId) as TextChannel | undefined;
-  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'O canal de anúncios configurado não existe.')] });
-  const embed = baseEmbed(COLORS.PRIMARY).setTitle(`${EMOJIS.MEGAPHONE} ${titulo}`).setDescription(mensagem).setFooter({ text: `Anúncio por ${i.user.tag} • ⚔️ Aliança Skyline` });
+  const channelId = canalId || config.announcementChannelId || i.channelId;
+  const channel = i.guild!.channels.cache.get(channelId!) as TextChannel | undefined;
+  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'Configure o canal de anúncios ou informe um ID válido.')] });
+  const embed = baseEmbed(COLORS.PRIMARY)
+    .setTitle(`${EMOJIS.MEGAPHONE} ${titulo}`)
+    .setDescription(mensagem)
+    .setFooter({ text: `⚔️ Aliança Skyline • ${i.user.tag}` })
+    .setTimestamp();
   await channel.send({ embeds: [embed] });
-  await i.editReply({ embeds: [successEmbed('Anúncio Enviado!', `Anúncio publicado em ${channel}`)] });
-}
-
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-
-async function updateConfig(i: ModalSubmitInteraction, field: string) {
-  if (!(await checkAdmin(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const value = i.fields.getTextInputValue('value').trim();
-  const resolvedValue = value.toLowerCase() === 'none' ? null : value;
-  await prisma.guildConfig.upsert({
-    where: { guildId: i.guild!.id },
-    update: { [field]: resolvedValue },
-    create: { guildId: i.guild!.id, [field]: resolvedValue },
-  });
-  const label = field.replace(/Id$/, '').replace(/([A-Z])/g, ' $1').toLowerCase();
-  await i.editReply({ embeds: [successEmbed('Config Atualizada!', `**${label}** foi ${resolvedValue ? `definido como \`${resolvedValue}\`` : 'removido'}.`)] });
+  await i.editReply({ embeds: [successEmbed('Anúncio Enviado!', `Publicado em ${channel}.`)] });
 }
 
 // ─── POLL ─────────────────────────────────────────────────────────────────────
@@ -186,71 +277,26 @@ async function createPoll(i: ModalSubmitInteraction) {
   if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
   const pergunta = i.fields.getTextInputValue('pergunta');
-  const opcoes = [
-    i.fields.getTextInputValue('opcao1'),
-    i.fields.getTextInputValue('opcao2'),
-    i.fields.getTextInputValue('opcao3').trim() || null,
-    i.fields.getTextInputValue('opcao4').trim() || null,
-  ].filter((o): o is string => !!o);
-
-  const guild = i.guild!;
-  const channel = i.channel as TextChannel;
-
-  const poll = await prisma.poll.create({
-    data: { guildId: guild.id, channelId: channel.id, question: pergunta, createdBy: i.user.id, options: { create: opcoes.map(label => ({ label, votes: 0 })) } },
-    include: { options: true },
-  });
-
-  const emojis = ['🅰️', '🅱️', '🆑', '🆔'];
-  const desc = poll.options.map((o, idx) => `${emojis[idx]} **${o.label}**\n\`░░░░░░░░░░\` 0%`).join('\n\n');
-  const embed = baseEmbed().setTitle(`📊 ${pergunta}`).setDescription(desc).setFooter({ text: '0 votos • ⚔️ Aliança Skyline' });
-
+  const opcoes = i.fields.getTextInputValue('opcoes').split('\n').map(o => o.trim()).filter(Boolean).slice(0, 4);
+  if (opcoes.length < 2) return i.editReply({ embeds: [errorEmbed('Poucas opções', 'Informe pelo menos 2 opções.')] });
+  const duracaoStr = i.fields.getTextInputValue('duracao').trim();
+  const ms = parseDuration(duracaoStr);
+  const endsAt = ms ? new Date(Date.now() + ms) : null;
+  const channelId = i.channelId!;
+  const poll = await prisma.poll.create({ data: { guildId: i.guild!.id, channelId, question: pergunta, createdBy: i.user.id, endsAt } });
+  await prisma.pollOption.createMany({ data: opcoes.map(label => ({ pollId: poll.id, label })) });
+  const options = await prisma.pollOption.findMany({ where: { pollId: poll.id } });
+  const embed = baseEmbed(COLORS.INFO)
+    .setTitle(`📊 ${pergunta}`)
+    .setDescription(options.map((o, idx) => `**${idx + 1}.** ${o.label} — 0 votos`).join('\n'))
+    .setFooter({ text: `Encerra ${endsAt ? `<t:${Math.floor(endsAt.getTime() / 1000)}:R>` : 'sem prazo'} • ⚔️ Aliança Skyline` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    poll.options.map((o, idx) =>
-      new ButtonBuilder().setCustomId(`poll:vote:${poll.id}:${idx}`).setLabel(o.label).setEmoji(emojis[idx]).setStyle(ButtonStyle.Primary)
-    )
+    ...options.map((o, idx) => new ButtonBuilder().setCustomId(`poll:vote:${poll.id}:${o.id}`).setLabel(`${idx + 1}`).setStyle(ButtonStyle.Secondary))
   );
-
+  const channel = i.guild!.channels.cache.get(channelId) as TextChannel;
   const msg = await channel.send({ embeds: [embed], components: [row] });
   await prisma.poll.update({ where: { id: poll.id }, data: { messageId: msg.id } });
-  await i.editReply({ embeds: [successEmbed('Poll Criada!', `Poll publicada em ${channel}`)] });
-}
-
-// ─── EVENTO ───────────────────────────────────────────────────────────────────
-
-async function createEvento(i: ModalSubmitInteraction) {
-  if (!(await checkAdmin(i))) return;
-  await i.deferReply({ ephemeral: true });
-  const titulo = i.fields.getTextInputValue('titulo');
-  const descricao = i.fields.getTextInputValue('descricao');
-  const dataStr = i.fields.getTextInputValue('data');
-  const ms = parseDuration(dataStr);
-  if (!ms) return i.editReply({ embeds: [errorEmbed('Data inválida', 'Use formatos como `2h`, `1d`, `30m`.')] });
-  const startsAt = new Date(Date.now() + ms);
-
-  const guild = i.guild!;
-  const channel = i.channel as TextChannel;
-
-  const event = await prisma.event.create({
-    data: { guildId: guild.id, channelId: channel.id, title: titulo, description: descricao, hostId: i.user.id, startsAt },
-  });
-
-  const embed = baseEmbed(COLORS.SECONDARY)
-    .setTitle(`${EMOJIS.BELL} ${titulo}`)
-    .setDescription(descricao)
-    .addFields(
-      { name: '📅 Quando', value: `<t:${Math.floor(startsAt.getTime() / 1000)}:F> (<t:${Math.floor(startsAt.getTime() / 1000)}:R>)`, inline: false },
-      { name: '👑 Organizador', value: `${i.user}`, inline: true },
-      { name: '👥 Participantes', value: '**0**', inline: true },
-    );
-
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`event:join:${event.id}`).setLabel('Participar').setEmoji('✅').setStyle(ButtonStyle.Success),
-  );
-
-  const msg = await channel.send({ embeds: [embed], components: [row] });
-  await prisma.event.update({ where: { id: event.id }, data: { messageId: msg.id } });
-  await i.editReply({ embeds: [successEmbed('Evento Criado!', `Evento publicado em ${channel}`)] });
+  await i.editReply({ embeds: [successEmbed('Enquete Criada!', `Publicada em ${channel}.`)] });
 }
 
 // ─── SORTEIO ──────────────────────────────────────────────────────────────────
@@ -259,104 +305,362 @@ async function createSorteio(i: ModalSubmitInteraction) {
   if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
   const premio = i.fields.getTextInputValue('premio');
-  const vencedores = Math.max(1, parseInt(i.fields.getTextInputValue('vencedores') || '1') || 1);
+  const vencedores = Math.max(1, parseInt(i.fields.getTextInputValue('vencedores')) || 1);
   const duracaoStr = i.fields.getTextInputValue('duracao');
   const ms = parseDuration(duracaoStr);
-  if (!ms) return i.editReply({ embeds: [errorEmbed('Duração inválida', 'Use formatos como `1h`, `2d`, `30m`.')] });
+  if (!ms) return i.editReply({ embeds: [errorEmbed('Duração inválida', 'Use: 10m, 1h, 1d')] });
   const endsAt = new Date(Date.now() + ms);
-
-  const guild = i.guild!;
   const channel = i.channel as TextChannel;
-
-  const giveaway = await prisma.giveaway.create({
-    data: { guildId: guild.id, channelId: channel.id, prize: premio, winners: vencedores, hostId: i.user.id, endsAt },
-  });
-
+  const giveaway = await prisma.giveaway.create({ data: { guildId: i.guild!.id, channelId: channel.id, prize: premio, winners: vencedores, hostId: i.user.id, endsAt } });
   const embed = baseEmbed(COLORS.GOLD)
-    .setTitle(`${EMOJIS.GIFT} Sorteio — ${premio}`)
+    .setTitle(`🎁 Sorteio — ${premio}`)
     .addFields(
       { name: '🏆 Vencedores', value: `**${vencedores}**`, inline: true },
       { name: '⏰ Encerra', value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`, inline: true },
       { name: '👑 Criado por', value: `${i.user}`, inline: true },
     )
     .setFooter({ text: '0 participantes • ⚔️ Aliança Skyline' });
-
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`giveaway:join:${giveaway.id}`).setLabel('Participar').setEmoji('🎁').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`giveaway:join:${giveaway.id}`).setLabel('Participar').setEmoji('🎁').setStyle(ButtonStyle.Success)
   );
-
   const msg = await channel.send({ embeds: [embed], components: [row] });
   await prisma.giveaway.update({ where: { id: giveaway.id }, data: { messageId: msg.id } });
-  await i.editReply({ embeds: [successEmbed('Sorteio Criado!', `Sorteio publicado em ${channel}`)] });
+  await i.editReply({ embeds: [successEmbed('Sorteio Criado!', `Sorteio de **${premio}** publicado em ${channel}.\nID: \`${giveaway.id}\``)] });
 }
 
-// ─── RANK SET ─────────────────────────────────────────────────────────────────
+// ─── ENCERRAR SORTEIO ─────────────────────────────────────────────────────────
+
+async function encerrarSorteio(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const id = i.fields.getTextInputValue('id').trim();
+  const giveaway = await prisma.giveaway.findUnique({ where: { id }, include: { entries: { include: { member: true } } } });
+  if (!giveaway || giveaway.guildId !== i.guild!.id) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Sorteio não encontrado.')] });
+  if (giveaway.ended) return i.editReply({ embeds: [errorEmbed('Já encerrado', 'Este sorteio já foi encerrado.')] });
+  const shuffled = [...giveaway.entries].sort(() => Math.random() - 0.5);
+  const chosen = shuffled.slice(0, giveaway.winners);
+  const winnerMentions = chosen.map(e => `<@${e.member.discordId}>`).join(', ') || 'Nenhum participante.';
+  await prisma.giveaway.update({ where: { id }, data: { ended: true, winnerIds: chosen.map(e => e.member.discordId) } });
+  const channel = i.guild!.channels.cache.get(giveaway.channelId) as TextChannel | undefined;
+  if (channel) {
+    await channel.send({ embeds: [baseEmbed(COLORS.GOLD).setTitle('🎉 Sorteio Encerrado!').setDescription(`**Prêmio:** ${giveaway.prize}\n**Vencedor(es):** ${winnerMentions}`).setFooter({ text: '⚔️ Aliança Skyline' })] });
+    if (giveaway.messageId) {
+      const msg = await channel.messages.fetch(giveaway.messageId).catch(() => null);
+      if (msg) await msg.edit({ components: [] }).catch(() => null);
+    }
+  }
+  await i.editReply({ embeds: [successEmbed('Encerrado!', `Vencedor(es): ${winnerMentions}`)] });
+}
+
+// ─── EVENTO ───────────────────────────────────────────────────────────────────
+
+async function createEvento(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const titulo = i.fields.getTextInputValue('titulo');
+  const descricao = i.fields.getTextInputValue('descricao').trim() || null;
+  const inicioStr = i.fields.getTextInputValue('inicio');
+  const ms = parseDuration(inicioStr);
+  if (!ms) return i.editReply({ embeds: [errorEmbed('Duração inválida', 'Use: 30m, 1h, 2d')] });
+  const startsAt = new Date(Date.now() + ms);
+  const channel = i.channel as TextChannel;
+  const event = await prisma.event.create({ data: { guildId: i.guild!.id, channelId: channel.id, title: titulo, description: descricao, hostId: i.user.id, startsAt } });
+  const embed = baseEmbed(COLORS.INFO)
+    .setTitle(`📌 Evento — ${titulo}`)
+    .setDescription(descricao ?? 'Sem descrição.')
+    .addFields(
+      { name: '⏰ Início', value: `<t:${Math.floor(startsAt.getTime() / 1000)}:R>`, inline: true },
+      { name: '👑 Criado por', value: `${i.user}`, inline: true },
+    )
+    .setFooter({ text: '0 inscritos • ⚔️ Aliança Skyline' });
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`event:join:${event.id}`).setLabel('Participar').setEmoji('📌').setStyle(ButtonStyle.Primary)
+  );
+  const msg = await channel.send({ embeds: [embed], components: [row] });
+  await prisma.event.update({ where: { id: event.id }, data: { messageId: msg.id } });
+  await i.editReply({ embeds: [successEmbed('Evento Criado!', `**${titulo}** publicado em ${channel}.`)] });
+}
+
+// ─── CONQUISTA ────────────────────────────────────────────────────────────────
+
+async function gerenciarConquista(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const acao = i.fields.getTextInputValue('acao').trim().toLowerCase();
+  const nome = i.fields.getTextInputValue('nome').trim();
+  const detalhes = i.fields.getTextInputValue('descricao').trim();
+  const recompensaStr = i.fields.getTextInputValue('recompensa').trim() || '0,0';
+
+  if (acao === 'criar') {
+    const [xpR, coinsR] = recompensaStr.split(',').map(Number);
+    const exists = await prisma.achievementTemplate.findFirst({ where: { guildId: i.guild!.id, name: nome } });
+    if (exists) return i.editReply({ embeds: [errorEmbed('Já existe', `Conquista **${nome}** já existe.`)] });
+    await prisma.achievementTemplate.create({ data: { guildId: i.guild!.id, name: nome, description: detalhes, xpReward: xpR || 0, coinsReward: coinsR || 0 } });
+    await i.editReply({ embeds: [successEmbed('Conquista Criada!', `**${nome}** criada com ${xpR || 0} XP e ${coinsR || 0} moedas.`)] });
+  } else if (acao === 'dar') {
+    const userId = resolveId(detalhes);
+    const template = await prisma.achievementTemplate.findFirst({ where: { guildId: i.guild!.id, name: nome } });
+    if (!template) return i.editReply({ embeds: [errorEmbed('Não encontrada', `Conquista **${nome}** não existe.`)] });
+    const member = await i.guild!.members.fetch(userId).catch(() => null);
+    if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+    const m = await getOrCreateMember(userId, member.user.username);
+    const alreadyHas = await prisma.achievement.findFirst({ where: { memberId: m.discordId, name: nome } });
+    if (alreadyHas) return i.editReply({ embeds: [errorEmbed('Já possui', `${member} já tem **${nome}**.`)] });
+    await prisma.achievement.create({ data: { memberId: m.discordId, name: nome, description: template.description } });
+    if (template.xpReward > 0) await prisma.member.update({ where: { discordId: userId }, data: { xp: { increment: template.xpReward } } });
+    if (template.coinsReward > 0) await prisma.member.update({ where: { discordId: userId }, data: { coins: { increment: template.coinsReward } } });
+    await i.editReply({ embeds: [successEmbed('Conquista Concedida!', `**${nome}** foi dada para ${member}.`)] });
+  } else {
+    await i.editReply({ embeds: [errorEmbed('Ação inválida', 'Use "criar" ou "dar".')] });
+  }
+}
+
+// ─── NÍVEL REWARD ─────────────────────────────────────────────────────────────
+
+async function setNivelReward(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const nivel = parseInt(i.fields.getTextInputValue('nivel'));
+  const cargoId = i.fields.getTextInputValue('cargo').trim() || null;
+  const moedas = parseInt(i.fields.getTextInputValue('moedas').trim()) || 0;
+  if (isNaN(nivel) || nivel < 1) return i.editReply({ embeds: [errorEmbed('Nível inválido', 'Informe um nível válido.')] });
+  if (!cargoId) {
+    await prisma.levelReward.deleteMany({ where: { guildId: i.guild!.id, level: nivel } });
+    return i.editReply({ embeds: [successEmbed('Removido', `Recompensa do nível ${nivel} removida.`)] });
+  }
+  await prisma.levelReward.upsert({
+    where: { guildId_level: { guildId: i.guild!.id, level: nivel } },
+    update: { roleId: cargoId, coins: moedas },
+    create: { guildId: i.guild!.id, level: nivel, roleId: cargoId, coins: moedas },
+  });
+  await i.editReply({ embeds: [successEmbed('Recompensa Configurada!', `Nível **${nivel}** → <@&${cargoId}>${moedas > 0 ? ` + **${moedas}** moedas` : ''}.`)] });
+}
+
+// ─── ADMIN ECONOMIA ───────────────────────────────────────────────────────────
+
+async function adminEconomia(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const acao = i.fields.getTextInputValue('acao').trim().toLowerCase();
+  const tipo = i.fields.getTextInputValue('tipo').trim().toLowerCase();
+  const userId = resolveId(i.fields.getTextInputValue('usuario'));
+  const quantidade = parseInt(i.fields.getTextInputValue('quantidade'));
+  if (isNaN(quantidade) || quantidade <= 0) return i.editReply({ embeds: [errorEmbed('Quantidade inválida', 'Informe um número positivo.')] });
+  const member = await i.guild!.members.fetch(userId).catch(() => null);
+  if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
+  const m = await getOrCreateMember(userId, member.user.username);
+  if (tipo === 'moedas') {
+    const delta = acao === 'dar' ? quantidade : -quantidade;
+    const novas = Math.max(0, m.coins + delta);
+    await prisma.member.update({ where: { discordId: userId }, data: { coins: novas } });
+    await i.editReply({ embeds: [successEmbed('Economia Atualizada', `${acao === 'dar' ? '+' : '-'}**${quantidade}** moedas para ${member}.\nNovo saldo: **${novas}** moedas.`)] });
+  } else if (tipo === 'xp') {
+    const delta = acao === 'dar' ? quantidade : -quantidade;
+    const novoXp = Math.max(0, m.xp + delta);
+    await prisma.member.update({ where: { discordId: userId }, data: { xp: novoXp } });
+    await i.editReply({ embeds: [successEmbed('XP Atualizado', `${acao === 'dar' ? '+' : '-'}**${quantidade}** XP para ${member}.\nNovo XP: **${novoXp}**.`)] });
+  } else {
+    await i.editReply({ embeds: [errorEmbed('Tipo inválido', 'Use "moedas" ou "xp".')] });
+  }
+}
+
+// ─── ADMIN LOJA ───────────────────────────────────────────────────────────────
+
+async function adminLoja(i: ModalSubmitInteraction) {
+  if (!(await checkAdmin(i))) return;
+  await i.deferReply({ ephemeral: true });
+  const acao = i.fields.getTextInputValue('acao').trim().toLowerCase();
+  const nome = i.fields.getTextInputValue('nome').trim();
+  const guildId = i.guild!.id;
+  if (acao === 'criar') {
+    const precoStr = i.fields.getTextInputValue('preco').trim();
+    const preco = parseInt(precoStr);
+    if (isNaN(preco) || preco <= 0) return i.editReply({ embeds: [errorEmbed('Preço inválido', 'Informe um preço válido.')] });
+    const descricao = i.fields.getTextInputValue('descricao').trim();
+    const cargoId = i.fields.getTextInputValue('cargo').trim() || null;
+    const exists = await prisma.shopItem.findFirst({ where: { guildId, name: nome } });
+    if (exists) return i.editReply({ embeds: [errorEmbed('Já existe', `O item **${nome}** já está na loja.`)] });
+    await prisma.shopItem.create({ data: { guildId, name: nome, description: descricao, price: preco, roleId: cargoId } });
+    await i.editReply({ embeds: [successEmbed('Item Criado!', `**${nome}** adicionado por **${preco}** moedas.`)] });
+  } else if (acao === 'remover') {
+    const item = await prisma.shopItem.findFirst({ where: { guildId, name: nome } });
+    if (!item) return i.editReply({ embeds: [errorEmbed('Não encontrado', `Item **${nome}** não existe.`)] });
+    await prisma.shopItem.update({ where: { id: item.id }, data: { active: false } });
+    await i.editReply({ embeds: [successEmbed('Item Removido', `**${nome}** foi removido da loja.`)] });
+  } else {
+    await i.editReply({ embeds: [errorEmbed('Ação inválida', 'Use "criar" ou "remover".')] });
+  }
+}
+
+// ─── RANK ─────────────────────────────────────────────────────────────────────
 
 async function setRank(i: ModalSubmitInteraction) {
   if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
   const userId = resolveId(i.fields.getTextInputValue('usuario'));
-  const newRank = i.fields.getTextInputValue('rank').trim();
-
-  if (!(RANKS as readonly string[]).includes(newRank)) {
-    return i.editReply({ embeds: [errorEmbed('Rank inválido', `Ranks válidos: ${RANKS.join(', ')}`)] });
-  }
-
-  const guild = i.guild!;
-  const member = await guild.members.fetch(userId).catch(() => null);
+  const rank = i.fields.getTextInputValue('rank').trim();
+  if (!RANKS.includes(rank as any)) return i.editReply({ embeds: [errorEmbed('Rank inválido', `Ranks válidos: ${RANKS.join(', ')}`)] });
+  const member = await i.guild!.members.fetch(userId).catch(() => null);
   if (!member) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado.')] });
-
-  await prisma.member.upsert({ where: { discordId: userId }, update: { rank: newRank }, create: { discordId: userId, username: member.user.username, rank: newRank } });
-  await i.editReply({ embeds: [successEmbed('Rank Atualizado!', `${member} agora é ${rankEmoji(newRank)} **${newRank}**!`)] });
+  await prisma.member.upsert({ where: { discordId: userId }, update: { rank }, create: { discordId: userId, username: member.user.username, rank } });
+  await i.editReply({ embeds: [successEmbed('Rank Definido!', `${member} agora é **${rank}** ${rankEmoji(rank)}.`)] });
 }
 
-// ─── FEEDBACK / SUGESTÃO ─────────────────────────────────────────────────────
+// ─── SUGESTÃO ─────────────────────────────────────────────────────────────────
 
-async function sendFeedbackMsg(i: ModalSubmitInteraction) {
-  await i.deferReply({ ephemeral: true });
-  const assunto = i.fields.getTextInputValue('assunto');
-  const mensagem = i.fields.getTextInputValue('mensagem');
-  const config = await getConfig(i.guild!.id);
-  const channelId = config.feedbackChannelId ?? config.logChannelId;
-  if (!channelId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Configure o canal de feedback via `/config`.')] });
-  const channel = i.guild!.channels.cache.get(channelId) as TextChannel | undefined;
-  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'O canal de feedback não existe.')] });
-  const embed = baseEmbed(COLORS.INFO)
-    .setTitle(`💬 Feedback — ${assunto}`)
-    .setDescription(mensagem)
-    .setAuthor({ name: i.user.tag, iconURL: i.user.displayAvatarURL() })
-    .setTimestamp();
-  await channel.send({ embeds: [embed] });
-  await i.editReply({ embeds: [successEmbed('Feedback Enviado!', 'Obrigado pelo seu feedback! A equipe irá analisá-lo.')] });
-}
-
-async function sendSugestaoMsg(i: ModalSubmitInteraction) {
+async function sendSugestao(i: ModalSubmitInteraction) {
   await i.deferReply({ ephemeral: true });
   const titulo = i.fields.getTextInputValue('titulo');
   const descricao = i.fields.getTextInputValue('descricao');
   const config = await getConfig(i.guild!.id);
-  const channelId = config.suggestionChannelId ?? config.logChannelId;
-  if (!channelId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Configure o canal de sugestões via `/config`.')] });
-  const channel = i.guild!.channels.cache.get(channelId) as TextChannel | undefined;
-  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'O canal de sugestões não existe.')] });
-  const embed = baseEmbed(COLORS.SUCCESS)
+  if (!config.suggestionChannelId) return i.editReply({ embeds: [errorEmbed('Não configurado', 'Canal de sugestões não configurado. Use `/admin` → Configurações → Canais.')] });
+  const channel = i.guild!.channels.cache.get(config.suggestionChannelId) as TextChannel | undefined;
+  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'Canal de sugestões não encontrado.')] });
+  const embed = baseEmbed(COLORS.INFO)
     .setTitle(`💡 ${titulo}`)
     .setDescription(descricao)
-    .setAuthor({ name: i.user.tag, iconURL: i.user.displayAvatarURL() })
-    .setTimestamp()
-    .setFooter({ text: '⚔️ Aliança Skyline • Use os botões para votar' });
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('sugestao:upvote').setLabel('👍 Apoiar').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('sugestao:downvote').setLabel('👎 Contra').setStyle(ButtonStyle.Danger),
-  );
-  await channel.send({ embeds: [embed], components: [row] });
-  await i.editReply({ embeds: [successEmbed('Sugestão Enviada!', 'Sua sugestão foi enviada para votação!')] });
+    .setAuthor({ name: i.user.username, iconURL: i.user.displayAvatarURL() })
+    .setTimestamp();
+  const msg = await channel.send({ embeds: [embed] });
+  await msg.react('✅').catch(() => null);
+  await msg.react('❌').catch(() => null);
+  await i.editReply({ embeds: [successEmbed('Sugestão Enviada!', 'Sua sugestão foi enviada para votação.')] });
 }
 
-// ─── HELPER ───────────────────────────────────────────────────────────────────
+// ─── FEEDBACK ─────────────────────────────────────────────────────────────────
 
-async function sendLog(guild: any, channelId: string | null | undefined, embed: EmbedBuilder) {
-  if (!channelId) return;
-  const ch = guild.channels.cache.get(channelId) as TextChannel | undefined;
-  if (ch) await ch.send({ embeds: [embed] }).catch(() => null);
+async function sendFeedback(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  const nota = i.fields.getTextInputValue('nota').trim();
+  const mensagem = i.fields.getTextInputValue('mensagem');
+  const notaNum = parseInt(nota);
+  if (isNaN(notaNum) || notaNum < 1 || notaNum > 10) return i.editReply({ embeds: [errorEmbed('Nota inválida', 'A nota deve ser entre 1 e 10.')] });
+  const config = await getConfig(i.guild!.id);
+  const channelId = config.feedbackChannelId ?? config.logChannelId;
+  if (!channelId) return i.editReply({ embeds: [errorEmbed('Não configurado', 'Canal de feedback não configurado.')] });
+  const channel = i.guild!.channels.cache.get(channelId) as TextChannel | undefined;
+  if (!channel) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'Canal de feedback não encontrado.')] });
+  const stars = '⭐'.repeat(Math.min(10, notaNum));
+  const embed = baseEmbed(notaNum >= 7 ? COLORS.SUCCESS : notaNum >= 4 ? COLORS.WARNING : COLORS.ERROR)
+    .setTitle(`📝 Feedback — ${nota}/10`)
+    .setDescription(`${stars}\n\n${mensagem}`)
+    .setAuthor({ name: i.user.username, iconURL: i.user.displayAvatarURL() })
+    .setTimestamp();
+  await channel.send({ embeds: [embed] });
+  await i.editReply({ embeds: [successEmbed('Feedback Enviado!', 'Obrigado pelo seu feedback!')] });
+}
+
+// ─── ALLOWLIST ────────────────────────────────────────────────────────────────
+
+async function allowlistAddGuild(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  if (!isBotManager(i.user.id)) return i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos e managers do bot podem fazer isso.')] });
+
+  const guildId  = i.fields.getTextInputValue('guild_id').trim();
+  const nota     = (() => { try { return i.fields.getTextInputValue('nota').trim() || null; } catch { return null; } })();
+  if (!/^\d{17,20}$/.test(guildId)) return i.editReply({ embeds: [errorEmbed('ID inválido', 'O ID do servidor deve ter entre 17 e 20 dígitos numéricos.')] });
+
+  const guildObj  = i.client.guilds.cache.get(guildId);
+  const guildName = guildObj?.name ?? nota ?? guildId;
+
+  await prisma.allowedGuild.upsert({
+    where:  { guildId },
+    update: { active: true, guildName, note: nota, addedBy: i.user.id },
+    create: { guildId, guildName, note: nota, addedBy: i.user.id },
+  });
+  cacheAddGuild(guildId);
+
+  return i.editReply({
+    embeds: [
+      successEmbed('Servidor Autorizado!',
+        `**${guildName}** (\`${guildId}\`) adicionado à allowlist.\n\n` +
+        `✅ **Total autorizado:** ${allowedGuildCount()} servidor(es)\n` +
+        (guildObj ? `🟢 O bot já está neste servidor.` : `⚠️ O bot ainda não está neste servidor — convide-o lá para ativar.`))
+    ],
+  });
+}
+
+async function allowlistRemoveGuild(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  if (!isBotManager(i.user.id)) return i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos e managers do bot podem fazer isso.')] });
+
+  const guildId = i.fields.getTextInputValue('guild_id').trim();
+  if (!/^\d{17,20}$/.test(guildId)) return i.editReply({ embeds: [errorEmbed('ID inválido', 'O ID do servidor deve ter entre 17 e 20 dígitos numéricos.')] });
+
+  const existing = await prisma.allowedGuild.findUnique({ where: { guildId } });
+  if (!existing || !existing.active) return i.editReply({ embeds: [errorEmbed('Não encontrado', `ID \`${guildId}\` não está na allowlist.`)] });
+
+  await prisma.allowedGuild.update({ where: { guildId }, data: { active: false } });
+  cacheRemoveGuild(guildId);
+
+  const guildObj = i.client.guilds.cache.get(guildId);
+  if (guildObj) await guildObj.leave().catch(() => null);
+
+  return i.editReply({
+    embeds: [
+      successEmbed('Servidor Removido',
+        `**${existing.guildName ?? guildId}** (\`${guildId}\`) removido da allowlist.\n` +
+        (guildObj ? '🚪 O bot saiu do servidor automaticamente.\n' : '') +
+        `\n✅ **Total restante:** ${allowedGuildCount()} servidor(es)`)
+    ],
+  });
+}
+
+async function allowlistAddManager(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  // Só donos podem adicionar managers
+  const { isBotOwner } = await import('../utils/allowlist');
+  if (!isBotOwner(i.user.id)) return i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem adicionar managers.')] });
+
+  const userId   = i.fields.getTextInputValue('user_id').trim();
+  const username = (() => { try { return i.fields.getTextInputValue('username').trim() || null; } catch { return null; } })();
+  if (!/^\d{17,20}$/.test(userId)) return i.editReply({ embeds: [errorEmbed('ID inválido', 'O ID do usuário deve ter entre 17 e 20 dígitos numéricos.')] });
+
+  await prisma.botManager.upsert({
+    where:  { userId },
+    update: { username: username ?? undefined, addedBy: i.user.id },
+    create: { userId, username: username ?? undefined, addedBy: i.user.id },
+  });
+  cacheAddManager(userId);
+
+  return i.editReply({
+    embeds: [successEmbed('Manager Adicionado', `<@${userId}>${username ? ` (${username})` : ''} agora pode gerenciar a allowlist do bot.`)],
+  });
+}
+
+async function allowlistRemoveManager(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  const { isBotOwner } = await import('../utils/allowlist');
+  if (!isBotOwner(i.user.id)) return i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem remover managers.')] });
+
+  const userId = i.fields.getTextInputValue('user_id').trim();
+  if (!/^\d{17,20}$/.test(userId)) return i.editReply({ embeds: [errorEmbed('ID inválido', 'O ID do usuário deve ter entre 17 e 20 dígitos numéricos.')] });
+
+  const existing = await prisma.botManager.findUnique({ where: { userId } });
+  if (!existing) return i.editReply({ embeds: [errorEmbed('Não encontrado', `<@${userId}> não é manager.`)] });
+
+  await prisma.botManager.delete({ where: { userId } });
+  cacheRemoveManager(userId);
+
+  return i.editReply({ embeds: [successEmbed('Manager Removido', `<@${userId}> não é mais manager do bot.`)] });
+}
+
+// ─── TRANSFERIR ───────────────────────────────────────────────────────────────
+
+async function transferirMoedas(i: ModalSubmitInteraction) {
+  await i.deferReply({ ephemeral: true });
+  const userId = resolveId(i.fields.getTextInputValue('usuario'));
+  const quantidade = parseInt(i.fields.getTextInputValue('quantidade'));
+  if (isNaN(quantidade) || quantidade <= 0) return i.editReply({ embeds: [errorEmbed('Quantidade inválida', 'Informe um valor positivo.')] });
+  if (userId === i.user.id) return i.editReply({ embeds: [errorEmbed('Inválido', 'Não pode transferir para si mesmo.')] });
+  const target = await i.guild!.members.fetch(userId).catch(() => null);
+  if (!target || target.user.bot) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Usuário não encontrado ou é um bot.')] });
+  const remetente = await getOrCreateMember(i.user.id, i.user.username);
+  if (remetente.coins < quantidade) return i.editReply({ embeds: [errorEmbed('Saldo insuficiente', `Você tem apenas **${remetente.coins}** moedas.`)] });
+  await getOrCreateMember(userId, target.user.username);
+  await prisma.$transaction([
+    prisma.member.update({ where: { discordId: i.user.id }, data: { coins: { decrement: quantidade } } }),
+    prisma.member.update({ where: { discordId: userId }, data: { coins: { increment: quantidade } } }),
+  ]);
+  await i.editReply({ embeds: [successEmbed('Transferência Realizada!', `${EMOJIS.COINS} **${quantidade}** moedas enviadas para ${target}.\nNovo saldo: **${remetente.coins - quantidade}** moedas.`)] });
 }

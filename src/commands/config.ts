@@ -1,34 +1,64 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  SlashCommandBuilder, ChatInputCommandInteraction,
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+} from 'discord.js';
 import { Command } from '../types';
-import { COLORS, EMOJIS, baseEmbed } from '../utils/embeds';
-import { getConfig } from '../utils/helpers';
-import { checkAdmin } from '../utils/permissions';
+import { isBotManager } from '../utils/allowlist';
+import { getBotConfig, intToHex, BotConfigData } from '../utils/botConfig';
+import { errorEmbed } from '../utils/embeds';
 
 export default {
-  category: 'admin',
-  data: new SlashCommandBuilder().setName('config').setDescription('Visualiza e edita as configurações do bot neste servidor'),
+  category: 'sistema',
+  data: new SlashCommandBuilder()
+    .setName('config')
+    .setDescription('Configurar a aparência dos embeds do bot (donos e managers)'),
+
   async execute(interaction: ChatInputCommandInteraction) {
-    if (!(await checkAdmin(interaction))) return;
-    const cfg = await getConfig(interaction.guild!.id);
-    const embed = baseEmbed(COLORS.DARK)
-      .setTitle(`${EMOJIS.GEAR} Configuração — ${interaction.guild!.name}`)
-      .addFields(
-        { name: '📋 Canal de Log', value: cfg.logChannelId ? `<#${cfg.logChannelId}>` : '`Não definido`', inline: true },
-        { name: '👋 Boas-vindas', value: cfg.welcomeChannelId ? `<#${cfg.welcomeChannelId}>` : '`Não definido`', inline: true },
-        { name: '📢 Anúncios', value: cfg.announcementChannelId ? `<#${cfg.announcementChannelId}>` : '`Não definido`', inline: true },
-        { name: '🎫 Cat. Tickets', value: cfg.ticketCategoryId ? `<#${cfg.ticketCategoryId}>` : '`Não definido`', inline: true },
-        { name: '📁 Log Tickets', value: cfg.ticketLogChannelId ? `<#${cfg.ticketLogChannelId}>` : '`Não definido`', inline: true },
-        { name: '🆙 Level-Up', value: cfg.levelUpChannelId ? `<#${cfg.levelUpChannelId}>` : '`Não definido`', inline: true },
-        { name: '💡 Sugestões', value: cfg.suggestionChannelId ? `<#${cfg.suggestionChannelId}>` : '`Não definido`', inline: true },
-        { name: '👑 Cargo Admin', value: cfg.adminRoleId ? `<@&${cfg.adminRoleId}>` : '`Não definido`', inline: true },
-        { name: '🛡️ Cargo Mod', value: cfg.modRoleId ? `<@&${cfg.modRoleId}>` : '`Não definido`', inline: true },
-        { name: '⭐ Cargo Membro', value: cfg.memberRoleId ? `<@&${cfg.memberRoleId}>` : '`Não definido`', inline: true },
-        { name: '🔇 Cargo Mutado', value: cfg.mutedRoleId ? `<@&${cfg.mutedRoleId}>` : '`Não definido`', inline: true },
-      );
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('config:canais').setLabel('Configurar Canais').setEmoji('#️⃣').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('config:cargos').setLabel('Configurar Cargos').setEmoji('👥').setStyle(ButtonStyle.Secondary),
-    );
-    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    if (!isBotManager(interaction.user.id)) {
+      return interaction.reply({
+        embeds: [errorEmbed('Acesso Negado', 'Apenas donos e managers do bot podem usar este comando.')],
+        ephemeral: true,
+      });
+    }
+
+    const cfg  = getBotConfig();
+    const embed = buildConfigEmbed(cfg, interaction.user.tag);
+    const rows  = buildConfigRows();
+    await interaction.reply({ embeds: [embed], components: rows, ephemeral: true });
   },
 } satisfies Command;
+
+// ─── Helpers exportados para o handler ───────────────────────────────────────
+
+export function buildConfigEmbed(cfg: BotConfigData, editor?: string): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(cfg.primaryColor)
+    .setTitle('⚙️ Configuração de Embeds')
+    .setDescription(
+      'Personalize a aparência dos embeds do bot em todos os servidores.\n' +
+      'As mudanças valem imediatamente para novos embeds gerados.',
+    )
+    .addFields(
+      { name: '📝 Rodapé Padrão',  value: `\`${cfg.footerText}\``,            inline: false },
+      { name: '🎨 Cor Principal',  value: `\`${intToHex(cfg.primaryColor)}\``, inline: true  },
+      { name: '🖼️ Ícone do Bot',   value: cfg.botIconUrl ? `[Ver link](${cfg.botIconUrl})` : '_Não definido_', inline: true },
+      { name: '📜 Rodapé do /rp',  value: `\`${cfg.rpFooterText}\``,           inline: false },
+    )
+    .setThumbnail(cfg.botIconUrl ?? null)
+    .setFooter({ text: editor ? `Última edição por ${editor}` : cfg.footerText })
+    .setTimestamp();
+}
+
+export function buildConfigRows(): ActionRowBuilder<ButtonBuilder>[] {
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('embedcfg:footer')  .setLabel('Rodapé Padrão').setEmoji('📝').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('embedcfg:color')   .setLabel('Cor Principal') .setEmoji('🎨').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('embedcfg:icon')    .setLabel('Ícone do Bot')  .setEmoji('🖼️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('embedcfg:rpfooter').setLabel('Rodapé /rp')    .setEmoji('📜').setStyle(ButtonStyle.Secondary),
+  );
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('embedcfg:reset')  .setLabel('Restaurar Padrões').setEmoji('↩️').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('embedcfg:refresh').setLabel('Atualizar')         .setEmoji('🔄').setStyle(ButtonStyle.Primary),
+  );
+  return [row1, row2];
+}

@@ -11,16 +11,19 @@ export async function getOrCreateMember(discordId: string, username: string) {
 
 export async function addXp(discordId: string, username: string, amount: number) {
   const member = await getOrCreateMember(discordId, username);
-  const newXp = member.xp + amount;
-  const xpNeeded = xpForNextLevel(member.level);
+  let xp = member.xp + amount;
+  let level = member.level;
 
-  if (newXp >= xpNeeded) {
-    return prisma.member.update({
-      where: { discordId },
-      data: { xp: newXp - xpNeeded, level: member.level + 1 },
-    });
+  // BUG FIX: usar loop para suportar múltiplos level-ups em uma única chamada
+  while (xp >= xpForNextLevel(level)) {
+    xp -= xpForNextLevel(level);
+    level++;
   }
-  return prisma.member.update({ where: { discordId }, data: { xp: newXp } });
+
+  return prisma.member.update({
+    where: { discordId },
+    data: { xp, level },
+  });
 }
 
 export async function getConfig(guildId: string) {

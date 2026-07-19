@@ -16,6 +16,7 @@ model Member {
   rank      String   @default("Recruta")
   warnings  Int      @default(0)
   coins     Int      @default(0)
+  gender    String   @default("NB")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -24,6 +25,43 @@ model Member {
   eventParticipants EventParticipant[]
 
   @@map("members")
+}
+
+// ─── Allowlist ────────────────────────────────────────────────────────────────
+
+model AllowedGuild {
+  id        String   @id @default(cuid())
+  guildId   String   @unique
+  guildName String?
+  addedBy   String
+  note      String?
+  active    Boolean  @default(true)
+  addedAt   DateTime @default(now())
+
+  @@map("allowed_guilds")
+}
+
+model BotManager {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  username  String?
+  addedBy   String
+  addedAt   DateTime @default(now())
+
+  @@map("bot_managers")
+}
+
+model ServerStat {
+  id       String @id @default(cuid())
+  guildId  String
+  date     String
+  joins    Int    @default(0)
+  leaves   Int    @default(0)
+  bans     Int    @default(0)
+  messages Int    @default(0)
+
+  @@unique([guildId, date])
+  @@map("server_stats")
 }
 
 // Achievements earned by a specific member
@@ -167,6 +205,52 @@ model EventParticipant {
   @@map("event_participants")
 }
 
+model ShopItem {
+  id          String   @id @default(cuid())
+  guildId     String
+  name        String
+  description String
+  price       Int
+  roleId      String?
+  stock       Int      @default(-1)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  purchases ShopPurchase[]
+
+  @@unique([guildId, name])
+  @@map("shop_items")
+}
+
+model ShopPurchase {
+  id       String   @id @default(cuid())
+  itemId   String
+  memberId String
+  guildId  String
+  boughtAt DateTime @default(now())
+
+  item ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("shop_purchases")
+}
+
+model DailyMission {
+  id         String  @id @default(cuid())
+  memberId   String
+  guildId    String
+  type       String
+  target     Int
+  progress   Int     @default(0)
+  completed  Boolean @default(false)
+  claimed    Boolean @default(false)
+  xpReward   Int
+  coinReward Int
+  dateStr    String
+
+  @@unique([memberId, guildId, type, dateStr])
+  @@map("daily_missions")
+}
+
 model GuildConfig {
   id                    String   @id @default(cuid())
   guildId               String   @unique
@@ -182,7 +266,300 @@ model GuildConfig {
   levelUpChannelId      String?
   suggestionChannelId   String?
   feedbackChannelId     String?
+  autoRoleId            String?
+  welcomeMessage        String?
+  xpMin                 Int      @default(15)
+  xpMax                 Int      @default(25)
+  xpCooldown            Int      @default(60)
+  antiSpam              Boolean  @default(false)
+  antiLinks             Boolean  @default(false)
   updatedAt             DateTime @updatedAt @default(now())
 
   @@map("guild_config")
+}
+
+model LevelReward {
+  id      String  @id @default(cuid())
+  guildId String
+  level   Int
+  roleId  String?
+  coins   Int     @default(0)
+
+  @@unique([guildId, level])
+  @@map("level_rewards")
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// RPG MODELS
+// ═══════════════════════════════════════════════════════════════════════
+
+model RpgCharacter {
+  discordId     String   @id
+  username      String
+  class         String   @default("guerreiro")
+  level         Int      @default(1)
+  xp            Int      @default(0)
+  generation    Int      @default(1)
+  gold          Int      @default(100)
+
+  // HP e Energia
+  currentHp     Int      @default(100)
+  maxHp         Int      @default(100)
+  currentEnergy Int      @default(50)
+  maxEnergy     Int      @default(50)
+
+  // Atributos base (pontos distribuídos pelo jogador)
+  strength      Int      @default(10)
+  agility       Int      @default(10)
+  intelligence  Int      @default(10)
+  vitality      Int      @default(10)
+  luck          Int      @default(10)
+
+  // Pontos disponíveis
+  statPoints    Int      @default(0)
+  skillPoints   Int      @default(0)
+
+  // Habilidade divina
+  divineSkillId   String? 
+  divineSkillRank String  @default("F")
+  divineSkillExp  Int     @default(0)
+
+  // Localização e ambiente
+  currentLocation String  @default("cidade_inicial")
+  environment     String  @default("DIA")
+
+  // Karma e PvP
+  karma         Int     @default(0)
+  pvpEnabled    Boolean @default(true)
+  pvpWins       Int     @default(0)
+  pvpLosses     Int     @default(0)
+
+  // Estatísticas gerais
+  totalKills    Int     @default(0)
+  totalDeaths   Int     @default(0)
+  totalWins     Int     @default(0)
+  bossKills     Int     @default(0)
+
+  // Timestamps
+  lastDungeon    DateTime?
+  lastTravel     DateTime?
+  lastPvp        DateTime?
+  lastRest       DateTime?
+  lastEnergyTick DateTime?   // usado para regen passiva de energia
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relações
+  equipment     RpgEquipment?
+  inventory     RpgInventoryItem[]
+  guildMembership RpgGuildMember?
+  learnedSkills RpgLearnedSkill[]
+  combatLogs    RpgCombatLog[]
+  craftQueue    RpgCraftQueue[]
+
+  @@map("rpg_characters")
+}
+
+model RpgEquipment {
+  characterId String  @id
+  weapon      String?
+  helmet      String?
+  pants       String?
+  boots       String?
+  gloves      String?
+  shield      String?
+  ring        String?
+  amulet      String?
+  backpack    String?
+  pet         String?
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+
+  @@map("rpg_equipment")
+}
+
+model RpgInventoryItem {
+  id          String   @id @default(cuid())
+  characterId String
+  itemId      String
+  quantity    Int      @default(1)
+  obtainedAt  DateTime @default(now())
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+
+  @@unique([characterId, itemId])
+  @@map("rpg_inventory")
+}
+
+model RpgGuild {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  tag         String   @unique
+  emblem      String   @default("⚔️")
+  description String?
+  leaderId    String
+  level       Int      @default(1)
+  xp          Int      @default(0)
+  gold        Int      @default(0)
+  maxMembers  Int      @default(20)
+  announcement String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     RpgGuildMember[]
+
+  @@map("rpg_guilds")
+}
+
+model RpgGuildMember {
+  id          String   @id @default(cuid())
+  characterId String   @unique
+  guildId     String
+  role        String   @default("Membro")
+  joinedAt    DateTime @default(now())
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+  guild       RpgGuild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@map("rpg_guild_members")
+}
+
+model RpgLearnedSkill {
+  id          String   @id @default(cuid())
+  characterId String
+  skillId     String
+  rank        String   @default("F")
+  exp         Int      @default(0)
+  learnedAt   DateTime @default(now())
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+
+  @@unique([characterId, skillId])
+  @@map("rpg_learned_skills")
+}
+
+model RpgCombatLog {
+  id          String   @id @default(cuid())
+  characterId String
+  type        String   // dungeon | boss | pvp
+  result      String   // vitoria | derrota | empate | fuga
+  enemyName   String?
+  opponentId  String?
+  xpGained    Int      @default(0)
+  goldGained  Int      @default(0)
+  itemsGained String[] @default([])
+  rounds      Int      @default(0)
+  summary     String?
+  createdAt   DateTime @default(now())
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+
+  @@map("rpg_combat_logs")
+}
+
+model RpgCraftQueue {
+  id          String   @id @default(cuid())
+  characterId String
+  recipeId    String
+  startedAt   DateTime @default(now())
+  completesAt DateTime
+  collected   Boolean  @default(false)
+  character   RpgCharacter @relation(fields: [characterId], references: [discordId], onDelete: Cascade)
+
+  @@map("rpg_craft_queue")
+}
+
+model RpgShopRotation {
+  id        String   @id @default(cuid())
+  itemId    String
+  price     Int
+  stock     Int      @default(-1)
+  sold      Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("rpg_shop_rotation")
+}
+
+// ─── Aliança Skyline ──────────────────────────────────────────────────────────
+
+model AllianceServer {
+  id          String   @id @default(cuid())
+  guildId     String   @unique
+  guildName   String?
+  memberCount Int      @default(0)
+  class       String   @default("Sem Classe")
+  channelId   String?
+  inviteLink  String?
+  addedBy     String
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members AllianceServerMember[]
+
+  @@map("alliance_servers")
+}
+
+model AllianceServerMember {
+  id       String   @id @default(cuid())
+  guildId  String
+  userId   String
+  username String?
+  role     String   // "owner" | "representative"
+  addedAt  DateTime @default(now())
+
+  server AllianceServer @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@map("alliance_server_members")
+}
+
+model AllianceBlacklist {
+  id       String   @id @default(cuid())
+  userId   String   @unique
+  username String?
+  reason   String?
+  addedBy  String
+  addedAt  DateTime @default(now())
+
+  @@map("alliance_blacklist")
+}
+
+model AllianceEmbed {
+  id        String   @id @default(cuid())
+  guildId   String   @unique
+  channelId String
+  messageId String
+  updatedAt DateTime @updatedAt
+
+  @@map("alliance_embeds")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BOT GLOBAL CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+
+model BotConfig {
+  id           String   @id @default("global")
+  footerText   String   @default("⚔️ Aliança Skyline")
+  primaryColor Int      @default(10180278)   // 0x9b59b6
+  botIconUrl   String?
+  rpFooterText String   @default("⚔️ Aliança Skyline • /genero para mudar seus pronomes")
+  updatedAt    DateTime @updatedAt @default(now())
+
+  @@map("bot_config")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EMBED TEMPLATES (customização total de embeds)
+// ═══════════════════════════════════════════════════════════════════════
+
+model EmbedTemplate {
+  key          String   @id
+  title        String?
+  description  String?
+  color        Int?
+  thumbnailUrl String?
+  imageUrl     String?
+  footerText   String?
+  footerIcon   String?
+  updatedAt    DateTime @updatedAt @default(now())
+
+  @@map("embed_templates")
 }

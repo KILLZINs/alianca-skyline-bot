@@ -1,4 +1,5 @@
 import { EmbedBuilder, ColorResolvable } from 'discord.js';
+import { getBotConfig } from './botConfig';
 
 export const COLORS = {
   PRIMARY:   0x9b59b6,
@@ -42,11 +43,12 @@ export const EMOJIS = {
   PIN:       '📌',
 } as const;
 
-export function baseEmbed(color: ColorResolvable = COLORS.PRIMARY): EmbedBuilder {
+export function baseEmbed(color?: ColorResolvable): EmbedBuilder {
+  const cfg = getBotConfig();
   return new EmbedBuilder()
-    .setColor(color)
+    .setColor(color ?? (cfg.primaryColor as ColorResolvable))
     .setTimestamp()
-    .setFooter({ text: '⚔️ Aliança Skyline' });
+    .setFooter({ text: cfg.footerText, iconURL: cfg.botIconUrl ?? undefined });
 }
 
 export function successEmbed(title: string, description?: string): EmbedBuilder {

@@ -1,0 +1,120 @@
+// ═══════════════════════════════════════════════════════════════════════
+// SISTEMA DE TEMPLATES DE EMBEDS — customização total por embed
+// ═══════════════════════════════════════════════════════════════════════
+
+import { EmbedBuilder, ColorResolvable } from 'discord.js';
+import { prisma } from '../database/client';
+
+export interface EmbedTemplateData {
+  key:          string;
+  title:        string | null;
+  description:  string | null;
+  color:        number | null;
+  thumbnailUrl: string | null;
+  imageUrl:     string | null;
+  footerText:   string | null;
+  footerIcon:   string | null;
+}
+
+// ── Catálogo de todos os embeds configuráveis ──────────────────────────
+export interface EmbedCatalogEntry {
+  label:    string;
+  category: string;
+  desc:     string;
+}
+
+export const EMBED_CATALOG: Record<string, EmbedCatalogEntry> = {
+  'welcome.channel':   { label: '👋 Boas-vindas (canal)',    category: 'geral',   desc: 'Embed de boas-vindas enviado no canal quando um membro entra' },
+  'welcome.dm':        { label: '📩 Boas-vindas (DM)',       category: 'geral',   desc: 'DM enviada automaticamente ao novo membro' },
+  'levelup':           { label: '🎯 Level Up',               category: 'geral',   desc: 'Notificação de subida de nível (sistema de XP)' },
+  'rp':                { label: '🎭 Roleplay (/rp)',          category: 'geral',   desc: 'Embed das ações de roleplay' },
+  'painel':            { label: '⚔️ Painel Principal',        category: 'geral',   desc: 'Painel principal do bot (/painel)' },
+  'combat.victory':    { label: '🏆 Vitória no Combate',     category: 'rpg',     desc: 'Resultado quando vence um combate' },
+  'combat.defeat':     { label: '💀 Derrota no Combate',     category: 'rpg',     desc: 'Resultado quando perde um combate' },
+  'combat.draw':       { label: '💥 Empate no Combate',      category: 'rpg',     desc: 'Resultado de empate' },
+  'alliance.official': { label: '🌐 Embed Oficial Aliança',  category: 'alianca', desc: 'Embed com lista oficial dos servidores da aliança' },
+};
+
+export const EMBED_CATEGORIES: Record<string, string> = {
+  geral:   '🎯 Geral',
+  rpg:     '⚔️ RPG',
+  alianca: '🌐 Aliança',
+};
+
+// ── Cache em memória ───────────────────────────────────────────────────
+const _cache = new Map<string, EmbedTemplateData>();
+
+export async function loadEmbedTemplates(): Promise<void> {
+  try {
+    const rows = await prisma.embedTemplate.findMany();
+    _cache.clear();
+    for (const row of rows) _cache.set(row.key, row as EmbedTemplateData);
+    console.log(`✅ ${rows.length} template(s) de embed carregado(s)`);
+  } catch (err) {
+    console.warn('⚠️ Tabela embed_templates não existe ainda — execute o SQL de migração.');
+  }
+}
+
+export function getTemplate(key: string): EmbedTemplateData | undefined {
+  return _cache.get(key);
+}
+
+/**
+ * Aplica o template ao embed APENAS nos campos que foram configurados.
+ * Campos não configurados mantêm o valor padrão do embed original.
+ */
+export function applyTemplate(embed: EmbedBuilder, key: string): EmbedBuilder {
+  const tpl = getTemplate(key);
+  if (!tpl) return embed;
+
+  if (tpl.title)                   embed.setTitle(tpl.title);
+  if (tpl.description)             embed.setDescription(tpl.description);
+  if (tpl.color !== null && tpl.color !== undefined) embed.setColor(tpl.color as ColorResolvable);
+  if (tpl.thumbnailUrl)            embed.setThumbnail(tpl.thumbnailUrl);
+  if (tpl.imageUrl)                embed.setImage(tpl.imageUrl);
+
+  if (tpl.footerText && tpl.footerIcon)  embed.setFooter({ text: tpl.footerText, iconURL: tpl.footerIcon });
+  else if (tpl.footerText)               embed.setFooter({ text: tpl.footerText });
+  else if (tpl.footerIcon) {
+    // só adiciona icon se já houver footer
+    const existing = embed.data.footer;
+    if (existing?.text) embed.setFooter({ text: existing.text, iconURL: tpl.footerIcon });
+  }
+
+  return embed;
+}
+
+// ── CRUD ───────────────────────────────────────────────────────────────
+
+export async function setTemplateField(
+  key: string,
+  field: keyof Omit<EmbedTemplateData, 'key'>,
+  value: string | number | null,
+): Promise<EmbedTemplateData> {
+  const data: Record<string, unknown> = { [field]: value };
+  const updated = await prisma.embedTemplate.upsert({
+    where:  { key },
+    update: data,
+    create: { key, ...data },
+  });
+  const cast = updated as EmbedTemplateData;
+  _cache.set(key, cast);
+  return cast;
+}
+
+export async function clearTemplate(key: string): Promise<void> {
+  await prisma.embedTemplate.deleteMany({ where: { key } }).catch(() => null);
+  _cache.delete(key);
+}
+
+/** Converte hex (#RRGGBB ou RRGGBB) para int */
+export function hexToInt(hex: string): number | null {
+  const clean = hex.replace(/^#/, '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return null;
+  return parseInt(clean, 16);
+}
+
+/** Converte int para hex string */
+export function intToHex(n: number): string {
+  return '#' + n.toString(16).padStart(6, '0').toUpperCase();
+}

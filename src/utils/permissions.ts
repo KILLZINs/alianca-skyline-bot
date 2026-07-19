@@ -6,7 +6,10 @@ import { errorEmbed } from './embeds';
 type AnyInteraction = ChatInputCommandInteraction | ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 
 export function isOwner(userId: string): boolean {
-  return userId === OWNER_ID || userId === (process.env.OWNER_ID ?? '');
+  if (userId === OWNER_ID) return true;
+  // Suporta múltiplos donos via BOT_OWNER_IDS (csv) além do legado OWNER_ID
+  const extra = (process.env.BOT_OWNER_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  return extra.includes(userId);
 }
 
 export async function isAdmin(member: GuildMember, guildId: string): Promise<boolean> {
@@ -26,12 +29,17 @@ export async function isModerator(member: GuildMember, guildId: string): Promise
 
 export async function checkAdmin(interaction: AnyInteraction): Promise<boolean> {
   if (!interaction.guild || !interaction.member) {
-    await interaction.reply({ embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em servidores.')], ephemeral: true });
+    // BUG FIX: verificar se interação já foi respondida antes de chamar reply
+    const errMsg = { embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em servidores.')], ephemeral: true };
+    if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => null);
+    else await interaction.reply(errMsg).catch(() => null);
     return false;
   }
   const member = interaction.member as GuildMember;
   if (!(await isAdmin(member, interaction.guild.id))) {
-    await interaction.reply({ embeds: [errorEmbed('Sem Permissão', 'Você precisa ser administrador para usar isso.')], ephemeral: true });
+    const errMsg = { embeds: [errorEmbed('Sem Permissão', 'Você precisa ser administrador para usar isso.')], ephemeral: true };
+    if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => null);
+    else await interaction.reply(errMsg).catch(() => null);
     return false;
   }
   return true;
@@ -39,12 +47,16 @@ export async function checkAdmin(interaction: AnyInteraction): Promise<boolean> 
 
 export async function checkModerator(interaction: AnyInteraction): Promise<boolean> {
   if (!interaction.guild || !interaction.member) {
-    await interaction.reply({ embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em servidores.')], ephemeral: true });
+    const errMsg = { embeds: [errorEmbed('Erro', 'Este comando só pode ser usado em servidores.')], ephemeral: true };
+    if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => null);
+    else await interaction.reply(errMsg).catch(() => null);
     return false;
   }
   const member = interaction.member as GuildMember;
   if (!(await isModerator(member, interaction.guild.id))) {
-    await interaction.reply({ embeds: [errorEmbed('Sem Permissão', 'Você precisa ser moderador para usar isso.')], ephemeral: true });
+    const errMsg = { embeds: [errorEmbed('Sem Permissão', 'Você precisa ser moderador para usar isso.')], ephemeral: true };
+    if (interaction.replied || interaction.deferred) await interaction.followUp(errMsg).catch(() => null);
+    else await interaction.reply(errMsg).catch(() => null);
     return false;
   }
   return true;

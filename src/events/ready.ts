@@ -2,12 +2,44 @@ import { Client, ActivityType, TextChannel, EmbedBuilder } from 'discord.js';
 import cron from 'node-cron';
 import { prisma } from '../database/client';
 import { COLORS, EMOJIS } from '../utils/embeds';
+import { loadAllowlist, isEnforcementActive, isGuildAllowed, getOwnerIds } from '../utils/allowlist';
+import { loadBotConfig } from '../utils/botConfig';
+import { loadEmbedTemplates } from '../utils/embedTemplates';
 
 export default {
   name: 'ready',
   once: true,
   async execute(client: Client) {
     console.log(`✅ Bot online como ${client.user?.tag}`);
+
+    // ─── Carregar allowlist do banco ──────────────────────────────────────────
+    await Promise.all([loadAllowlist(), loadBotConfig(), loadEmbedTemplates()]);
+    console.log(`[botConfig] Configuração de embeds carregada.`);
+    console.log(`[allowlist] Cache carregado. Enforcement: ${isEnforcementActive() ? 'ATIVO' : 'inativo (lista vazia)'}`);
+
+    // ─── Sair de servidores não autorizados (se enforcement ativo) ────────────
+    if (isEnforcementActive()) {
+      for (const [, guild] of client.guilds.cache) {
+        if (!isGuildAllowed(guild.id)) {
+          console.log(`[allowlist] Saindo de servidor não autorizado na inicialização: ${guild.name} (${guild.id})`);
+          const notifyEmbed = new EmbedBuilder()
+            .setColor(COLORS.WARNING)
+            .setTitle(`${EMOJIS.WARNING} Servidor Removido da Allowlist`)
+            .setDescription(
+              `O bot foi removido automaticamente do servidor **${guild.name}** (\`${guild.id}\`) por não estar na allowlist.\n\n` +
+              `Para reautorizar: \`/botadmin servidor adicionar guild_id:${guild.id}\``
+            )
+            .setTimestamp();
+          for (const ownerId of getOwnerIds()) {
+            try {
+              const user = await client.users.fetch(ownerId);
+              await user.send({ embeds: [notifyEmbed] });
+            } catch { /* DMs fechadas */ }
+          }
+          await guild.leave().catch(console.error);
+        }
+      }
+    }
 
     const activities = [
       { name: 'Aliança Skyline ⚔️', type: ActivityType.Watching },
@@ -30,7 +62,7 @@ export default {
       });
 
       for (const giveaway of ended) {
-        await prisma.giveaway.update({ where: { id: giveaway.id }, data: { ended: true } });
+        // BUG FIX: marcar ended e winnerIds em uma única chamada para evitar estado inconsistente
 
         const guild = client.guilds.cache.get(giveaway.guildId);
         if (!guild) continue;
@@ -46,7 +78,7 @@ export default {
           winnerIds.push(shuffled[w].member.discordId);
         }
 
-        await prisma.giveaway.update({ where: { id: giveaway.id }, data: { winnerIds } });
+        await prisma.giveaway.update({ where: { id: giveaway.id }, data: { ended: true, winnerIds } });
 
         const mentionList = winnerIds.length
           ? winnerIds.map(id => `<@${id}>`).join(', ')

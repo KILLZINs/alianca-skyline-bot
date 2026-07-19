@@ -10,6 +10,7 @@ export async function handleSelect(interaction: StringSelectMenuInteraction) {
   const [prefix, action] = interaction.customId.split(':');
   try {
     if (prefix === 'ticket' && action === 'category') return await ticketCategory(interaction);
+    if (prefix === 'rpg_select') return await (await import('./../rpg/handlers/rpgSelectHandler')).handleRpgSelect(interaction, action);
   } catch (err) {
     console.error('Select error:', err);
     const e = errorEmbed('Erro', 'Ocorreu um erro ao processar esta ação.');

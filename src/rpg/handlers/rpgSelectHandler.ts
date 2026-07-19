@@ -1,0 +1,245 @@
+// ═══════════════════════════════════════════════════════════════════════
+// HANDLER DE SELECT MENUS RPG
+// ═══════════════════════════════════════════════════════════════════════
+
+import { StringSelectMenuInteraction } from 'discord.js';
+import { getOrCreateCharacter, computeStats, distributeStatPoints } from '../services/character';
+import { travelTo } from '../panels/travel';
+import { buildProfileEmbed, buildProfileButtons } from '../panels/profile';
+import { buildTravelEmbed, buildTravelSelect, buildTravelBackButton } from '../panels/travel';
+import { doBattleEnemy } from '../panels/dungeon';
+import { buildDungeonEmbed, buildDungeonSelect, buildDungeonButtons } from '../panels/dungeon';
+import { buildShopEmbed, buildShopItemSelect, buildShopButtons } from '../panels/shop';
+import { equipItem, useConsumable, sellItem, buyItem } from '../services/inventory';
+import { buildInventarioEmbed, buildInventarioButtons, buildItemActionSelect } from '../panels/inventario';
+import { joinGuild } from '../panels/guild';
+import { craftItem } from '../panels/forja';
+import { prisma } from '../../database/client';
+import { errorEmbed, successEmbed } from '../../utils/embeds';
+
+export async function handleRpgSelect(i: StringSelectMenuInteraction, action: string): Promise<void> {
+  const discordId = i.user.id;
+  const username  = i.user.username;
+
+  try {
+    switch (action) {
+
+      // ── Distribuir ponto de stat ─────────────────────────────────────────
+      case 'distribuir_stat': {
+        await i.deferUpdate();
+        const stat = i.values[0] as any;
+        const result = await distributeStatPoints(discordId, stat, 1);
+        const char   = await getOrCreateCharacter(discordId, username);
+        const stats  = computeStats(char);
+        const { buildPontosEmbed, buildPontosSelect } = await import('../panels/profile');
+        if (result.success) {
+          await i.editReply({
+            embeds: [buildPontosEmbed(char, stats)],
+            components: [buildPontosSelect(char.statPoints)],
+          });
+        } else {
+          await i.editReply({ embeds: [errorEmbed('Erro', result.message)] });
+        }
+        break;
+      }
+
+      // ── Viajar para destino ──────────────────────────────────────────────
+      case 'viajar_destino': {
+        await i.deferUpdate();
+        let char = await getOrCreateCharacter(discordId, username);
+        const result = await travelTo(char, i.values[0]);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Viagem falhou', result.message)] });
+          return;
+        }
+        char = await getOrCreateCharacter(discordId, username);
+        const select = buildTravelSelect(char);
+        await i.editReply({
+          embeds: [buildTravelEmbed(char)],
+          components: select ? [select, buildTravelBackButton()] : [buildTravelBackButton()],
+        });
+        break;
+      }
+
+      // ── Batalha dungeon com inimigo específico ───────────────────────────
+      case 'dungeon_inimigo': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        if (char.currentHp <= 0) {
+          await i.editReply({ embeds: [errorEmbed('Sem HP', 'Você está sem HP! Vá à cidade e se cure primeiro.')], components: [] });
+          return;
+        }
+        if (char.currentEnergy < 10) {
+          await i.editReply({ embeds: [errorEmbed('Sem Energia ⚡', `Você tem apenas **${char.currentEnergy}** de energia — mínimo para batalhar é **10**.\nVá à 🏰 Cidade → 🏥 Curar para restaurar energia.`)], components: [] });
+          return;
+        }
+        const { embed, rows } = await doBattleEnemy(char, i.values[0]);
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
+
+      // ── Categoria da loja ────────────────────────────────────────────────
+      case 'loja_categoria': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const category = i.values[0];
+        const itemSelect = buildShopItemSelect(char, category);
+        await i.editReply({
+          embeds: [buildShopEmbed(char, category)],
+          components: itemSelect ? [itemSelect, buildShopButtons(category)] : [buildShopButtons(category)],
+        });
+        break;
+      }
+
+      // ── Comprar item na loja ─────────────────────────────────────────────
+      case 'loja_comprar': {
+        await i.deferUpdate();
+        const itemId = i.values[0];
+        const result = await buyItem(discordId, itemId);
+        if (result.success) {
+          await i.editReply({ embeds: [successEmbed('Compra realizada!', result.message)] });
+        } else {
+          await i.editReply({ embeds: [errorEmbed('Erro na compra', result.message)] });
+        }
+        break;
+      }
+
+      // ── Ação com item do inventário ──────────────────────────────────────
+      case 'inventario_acao': {
+        await i.deferUpdate();
+        const itemId = i.values[0];
+        const select = buildItemActionSelect(itemId);
+        if (!select) {
+          await i.editReply({ embeds: [errorEmbed('Erro', 'Nenhuma ação disponível para este item.')] });
+          return;
+        }
+        const { getItem } = await import('../constants/items');
+        const item = getItem(itemId);
+        const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = await import('discord.js');
+        await i.editReply({
+          embeds: [new EmbedBuilder().setColor(0x3498DB).setTitle(`${item?.emoji ?? '❓'} ${item?.name ?? itemId}`).setDescription(item?.description ?? '').addFields(
+            { name: '📊 Raridade', value: item?.rarity ?? '-', inline: true },
+            { name: '💰 Venda', value: `${item?.sellPrice ?? 0} ouro`, inline: true },
+            { name: '📌 Slot', value: item?.slot ?? '-', inline: true },
+          )],
+          components: [select],
+        });
+        break;
+      }
+
+      // ── Executar ação com item (equip/usar/vender) ───────────────────────
+      case 'item_acao': {
+        await i.deferUpdate();
+        const [actionType, itemId] = i.values[0].split(':');
+        let result: { success: boolean; message: string };
+
+        if (actionType === 'equip') {
+          result = await equipItem(discordId, itemId);
+        } else if (actionType === 'usar') {
+          result = await useConsumable(discordId, itemId);
+        } else if (actionType === 'vender') {
+          result = await sellItem(discordId, itemId, 1);
+        } else {
+          result = { success: false, message: 'Ação desconhecida.' };
+        }
+
+        const char = await getOrCreateCharacter(discordId, username);
+        const { embed: invEmbed, select: invSelect } = await buildInventarioEmbed(char);
+
+        if (result.success) {
+          const { infoEmbed } = await import('../../utils/embeds');
+          await i.editReply({
+            embeds: [infoEmbed('✅ Concluído', result.message), invEmbed],
+            components: invSelect ? [invSelect, buildInventarioButtons()] : [buildInventarioButtons()],
+          });
+        } else {
+          await i.editReply({ embeds: [errorEmbed('Erro', result.message)] });
+        }
+        break;
+      }
+
+      // ── Equipar habilidade divina ─────────────────────────────────────────
+      case 'equipar_skill': {
+        await i.deferUpdate();
+        const skillId = i.values[0];
+        const { DIVINE_SKILLS } = await import('../constants/skills');
+        const skill = DIVINE_SKILLS[skillId];
+        if (!skill) {
+          await i.editReply({ embeds: [errorEmbed('Erro', 'Habilidade inválida.')] });
+          return;
+        }
+        const char = await getOrCreateCharacter(discordId, username);
+        if (char.level < skill.unlockLevel) {
+          await i.editReply({ embeds: [errorEmbed('Nível insuficiente', `Precisa ser nível ${skill.unlockLevel} para esta habilidade.`)] });
+          return;
+        }
+        await prisma.rpgCharacter.update({
+          where: { discordId },
+          data: { divineSkillId: skillId, divineSkillRank: 'F', divineSkillExp: 0 },
+        });
+        await i.editReply({ embeds: [successEmbed('Habilidade Equipada!', `${skill.emoji} **${skill.name}** equipada com sucesso!`)] });
+        break;
+      }
+
+      // ── Guilda: entrar ────────────────────────────────────────────────────
+      case 'guild_entrar': {
+        await i.deferUpdate();
+        const guildId = i.values[0];
+        const result = await joinGuild(discordId, guildId);
+        await i.editReply({
+          embeds: [result.success ? successEmbed('Guilda', result.message) : errorEmbed('Erro', result.message)],
+        });
+        break;
+      }
+
+      // ── Forja: fabricar item ──────────────────────────────────────────────
+      case 'forja_receita': {
+        await i.deferUpdate();
+        const result = await craftItem(discordId, i.values[0]);
+        await i.editReply({
+          embeds: [result.success ? successEmbed('Forja', result.message) : errorEmbed('Erro na Forja', result.message)],
+        });
+        break;
+      }
+
+      // ── Escolher classe inicial (/rpg start) ──────────────────────────────
+      case 'escolher_classe': {
+        await i.deferUpdate();
+
+        // valor tem formato "start_class:<classId>"
+        const classId = i.values[0].replace('start_class:', '');
+        const { setClass } = await import('../services/character');
+
+        const char = await getOrCreateCharacter(discordId, username);
+        const result = await setClass(discordId, classId);
+
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Erro', result.message)] });
+          return;
+        }
+
+        // recarrega o personagem com a classe definida e mostra o perfil
+        const updated = await getOrCreateCharacter(discordId, username);
+        const stats   = computeStats(updated);
+        const { getClass } = await import('../constants/classes');
+        const cls = getClass(classId);
+
+        await i.editReply({
+          content: `${cls?.emoji ?? '⚔️'} **Personagem criado!** Bem-vindo à aventura, **${username}**!`,
+          embeds: [buildProfileEmbed(updated, stats)],
+          components: buildProfileButtons(updated),
+        });
+        break;
+      }
+
+      default:
+        await i.editReply({ embeds: [errorEmbed('Ação desconhecida', `Select RPG \`${action}\` não encontrado.`)] });
+    }
+  } catch (err) {
+    console.error(`[RPG Select Error] action=${action}`, err);
+    const errMsg = { embeds: [errorEmbed('Erro RPG', 'Ocorreu um erro. Tente novamente.')] };
+    if (i.replied) await i.followUp({ ...errMsg, ephemeral: true }).catch(() => null);
+    else if (i.deferred) await i.editReply(errMsg).catch(() => null);
+    else await i.reply({ ...errMsg, ephemeral: true }).catch(() => null);
+  }
+}

@@ -1,10 +1,17 @@
-import { Message, TextChannel, EmbedBuilder } from 'discord.js';
+import { Message, TextChannel, EmbedBuilder, GuildMember } from 'discord.js';
 import { addXp, getConfig } from '../utils/helpers';
+import { applyChatEnergyRegen } from '../rpg/services/character';
 import { COLORS, EMOJIS, levelBar, colorFromLevel } from '../utils/embeds';
 import { xpForNextLevel } from '../types';
 import { prisma } from '../database/client';
 
-const cooldowns = new Map<string, number>();
+// BUG FIX: cooldown por guildId:userId em vez de só userId
+// (evita que XP de um servidor bloqueie o de outro)
+const cooldowns  = new Map<string, number>();
+const spamTrack  = new Map<string, { count: number; reset: number }>();
+const linkRegex  = /https?:\/\/|discord\.gg\//i;
+
+function today() { return new Date().toISOString().slice(0, 10); }
 
 export default {
   name: 'messageCreate',
@@ -12,23 +19,109 @@ export default {
   async execute(message: Message) {
     if (message.author.bot || !message.guild || message.content.startsWith('/')) return;
 
-    // XP cooldown: 1 message per minute per user
-    const now = Date.now();
-    const last = cooldowns.get(message.author.id) ?? 0;
-    if (now - last < 60_000) return;
-    cooldowns.set(message.author.id, now);
+    const guildId  = message.guild.id;
+    const authorId = message.author.id;
+    const config   = await getConfig(guildId);
 
-    const xpGain = Math.floor(Math.random() * 11) + 15; // 15-25 XP
-    const before = await prisma.member.findUnique({ where: { discordId: message.author.id } });
-    const after = await addXp(message.author.id, message.author.username, xpGain);
+    // ─── Track daily message count ────────────────────────────────────────────
+    prisma.serverStat.upsert({
+      where:  { guildId_date: { guildId, date: today() } },
+      update: { messages: { increment: 1 } },
+      create: { guildId, date: today(), messages: 1 },
+    }).catch(() => null);
 
-    // Level up!
+    // ─── Anti-spam ────────────────────────────────────────────────────────────
+    if (config.antiSpam) {
+      const key   = `${guildId}:${authorId}`;
+      const now   = Date.now();
+      const entry = spamTrack.get(key) ?? { count: 0, reset: now + 5000 };
+      if (now > entry.reset) { entry.count = 0; entry.reset = now + 5000; }
+      entry.count++;
+      spamTrack.set(key, entry);
+      if (entry.count > 5) {
+        await message.delete().catch(() => null);
+        const warn = await (message.channel as TextChannel)
+          .send({ content: `${message.author}, devagar! ⚠️ Anti-spam ativado.` }).catch(() => null);
+        if (warn) setTimeout(() => warn.delete().catch(() => null), 4000);
+        return;
+      }
+    }
+
+    // ─── Anti-links ───────────────────────────────────────────────────────────
+    if (config.antiLinks && linkRegex.test(message.content)) {
+      const mem = message.member as GuildMember;
+      if (!mem?.permissions.has('ManageMessages')) {
+        await message.delete().catch(() => null);
+        const warn = await (message.channel as TextChannel)
+          .send({ content: `${message.author}, links não são permitidos aqui! 🔗` }).catch(() => null);
+        if (warn) setTimeout(() => warn.delete().catch(() => null), 4000);
+        return;
+      }
+    }
+
+    // ─── XP cooldown — BUG FIX: chave por guildId:userId ─────────────────────
+    const now       = Date.now();
+    const cdKey     = `${guildId}:${authorId}`;
+    const cooldownMs = (config.xpCooldown ?? 60) * 1000;
+    if (now - (cooldowns.get(cdKey) ?? 0) < cooldownMs) return;
+    cooldowns.set(cdKey, now);
+
+    const xpMin  = config.xpMin ?? 15;
+    const xpMax  = config.xpMax ?? 25;
+    const xpGain = Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin;
+
+    // BUG FIX: garantir que member existe no DB antes de tentar update
+    const before = await prisma.member.findUnique({ where: { discordId: authorId } });
+    const after  = await addXp(authorId, message.author.username, xpGain);
+
+    // ─── RPG: regen de energia via chat (fire-and-forget) ────────────────────
+    applyChatEnergyRegen(authorId).catch(() => null);
+
+    // ─── Mission progress ─────────────────────────────────────────────────────
+    const dateStr = today();
+    await Promise.all([
+      prisma.dailyMission.updateMany({
+        where: { memberId: authorId, guildId, type: 'estar_online',     dateStr, completed: false },
+        data:  { progress: 1, completed: true },
+      }),
+      prisma.dailyMission.updateMany({
+        where: { memberId: authorId, guildId, type: 'enviar_mensagens', dateStr, completed: false },
+        data:  { progress: { increment: 1 } },
+      }),
+      prisma.dailyMission.updateMany({
+        where: { memberId: authorId, guildId, type: 'ganhar_xp',        dateStr, completed: false },
+        data:  { progress: { increment: xpGain } },
+      }),
+    ]).catch(() => null);
+
+    // Marcar missões concluídas
+    prisma.dailyMission.findMany({ where: { memberId: authorId, guildId, dateStr, completed: false } })
+      .then(pending => Promise.all(
+        pending.filter(m => m.progress >= m.target).map(m =>
+          prisma.dailyMission.update({ where: { id: m.id }, data: { completed: true } })
+        )
+      )).catch(() => null);
+
+    // ─── Level up ─────────────────────────────────────────────────────────────
     if (before && after.level > before.level) {
-      const config = await getConfig(message.guild.id);
+      // Recompensa de nível
+      prisma.levelReward.findUnique({ where: { guildId_level: { guildId, level: after.level } } })
+        .then(async reward => {
+          if (!reward) return;
+          if (reward.roleId) await (message.member as GuildMember)?.roles.add(reward.roleId).catch(() => null);
+          if (reward.coins > 0) {
+            await prisma.member.update({
+              where: { discordId: authorId },
+              data:  { coins: { increment: reward.coins } },
+            });
+          }
+        }).catch(() => null);
+
       const channelId = config.levelUpChannelId ?? message.channel.id;
-      const channel = message.guild.channels.cache.get(channelId) as TextChannel | undefined;
+      const channel   = message.guild.channels.cache.get(channelId) as TextChannel | undefined;
       if (!channel) return;
 
+      const { applyTemplate: applyLevelUpTemplate } = await import('../utils/embedTemplates');
       const embed = new EmbedBuilder()
         .setColor(colorFromLevel(after.level))
         .setTitle(`${EMOJIS.LEVEL} Level Up!`)
@@ -37,9 +130,10 @@ export default {
           `Parabéns ${message.author}! Você subiu para o **Nível ${after.level}**! 🎉\n\n` +
           `\`${levelBar(after.xp, xpForNextLevel(after.level))}\``
         )
-        .setFooter({ text: '⚔️ Aliança Skyline' })
+        .setFooter({ text: `⚔️ ${message.guild.name}` })
         .setTimestamp();
 
+      applyLevelUpTemplate(embed, 'levelup');
       await channel.send({ embeds: [embed] }).catch(console.error);
     }
   },
