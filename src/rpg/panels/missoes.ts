@@ -99,7 +99,9 @@ export async function buildMissoesClaimSelect(discordId: string, guildId: string
 export function buildMissoesButtons(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:missoes').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('rpg:cidade').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(ButtonStyle.Secondary),
   );
 }
 
