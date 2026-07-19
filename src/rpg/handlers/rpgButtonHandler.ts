@@ -547,7 +547,7 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
 
         await i.editReply({
           embeds: [statsEmbed],
-          components: [new StatsAR<StatsBB>().addComponents(
+          components: [new StatsAR<any>().addComponents(
             new StatsBB().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(StatsBS.Secondary),
             new StatsBB().setCustomId('rpg:stats').setLabel('🔄 Atualizar').setStyle(StatsBS.Secondary),
           )],
