@@ -71,9 +71,9 @@ export default {
       return;
     }
 
-    // ── Select menus ─────────────────────────────────────────────────────────
-    if (interaction.isStringSelectMenu()) {
-      await handleSelect(interaction);
+    // ── Select menus (string, role, channel, user) ───────────────────────────
+    if (interaction.isAnySelectMenu()) {
+      await handleSelect(interaction as any);
       return;
     }
 
