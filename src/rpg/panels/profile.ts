@@ -196,18 +196,25 @@ export function buildProfileEmbed(char: FullCharacter, stats: ComputedStats): Em
 // ─── Botões do perfil ──────────────────────────────────────────────────────────
 
 export function buildProfileButtons(char: FullCharacter): ActionRowBuilder<ButtonBuilder>[] {
+  // Linha 1: ações principais (combate e exploração)
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:viajar').setLabel('🗺️ Viajar').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`rpg:pontos`).setLabel(`⭐ Pontos (${char.statPoints})`).setStyle(char.statPoints > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary).setDisabled(char.statPoints === 0),
+    new ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
   );
 
+  // Linha 2: gerenciamento e acesso rápido
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:habilidades').setLabel('✨ Habilidades').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('rpg:guild').setLabel('🏛️ Guilda').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:stats').setLabel('📊 Estatísticas').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('rpg:pontos')
+      .setLabel(char.statPoints > 0 ? `⭐ Pontos (${char.statPoints}) ←` : '⭐ Pontos')
+      .setStyle(char.statPoints > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setDisabled(char.statPoints === 0),
   );
 
   return [row1, row2];
@@ -218,37 +225,41 @@ export function buildProfileButtons(char: FullCharacter): ActionRowBuilder<Butto
 export function buildCidadeEmbed(): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(0x3498DB)
-    .setTitle('🏰 Cidade da Aliança')
-    .setDescription('Bem-vindo ao coração da Aliança Skyline! O que deseja fazer?')
-    .addFields(
-      { name: '🛒 Loja',          value: 'Compre equipamentos e consumíveis', inline: true },
-      { name: '⚒️ Forja',         value: 'Crie itens com materiais',          inline: true },
-      { name: '🏥 Curandeiro',    value: 'Restaure HP e Energia',             inline: true },
-      { name: '📋 Missões',       value: 'Missões diárias e semanais',        inline: true },
-      { name: '💍 Casamento',     value: 'Propor, aceitar ou divorciar',      inline: true },
-      { name: '🐉 Boss Mundial',  value: 'Enfrentar o boss épico da guilda',  inline: true },
-      { name: '🏛️ Guilda',        value: 'Gerenciar sua guilda',              inline: true },
-      { name: '⚔️ Arena PvP',    value: 'Desafie outros jogadores',           inline: true },
+    .setTitle('🏰 Cidade da Aliança — Hub Central')
+    .setDescription(
+      'O coração da Aliança Skyline. Prepare-se e embarque em novas aventuras.\n' +
+      '> **Linha 1** dos botões: Loja · Curar · Forja · Missões · Boss\n' +
+      '> **Linha 2** dos botões: Arena · Casar · Guilda · ◀ Voltar ao Perfil'
     )
-    .setFooter({ text: '⚔️ Aliança Skyline RPG' });
+    .addFields(
+      { name: '🛒 Loja',         value: 'Equipamentos e consumíveis',         inline: true },
+      { name: '🏥 Curar HP',     value: 'Restaura HP e Energia (custa ouro)', inline: true },
+      { name: '⚒️ Forja',        value: 'Crie itens com materiais raros',     inline: true },
+      { name: '📋 Missões',      value: 'Diárias e semanais com recompensa',  inline: true },
+      { name: '🐉 Boss Mundial', value: 'Boss épico cooperativo da guilda',   inline: true },
+      { name: '⚔️ Arena PvP',    value: 'Desafie outros jogadores',           inline: true },
+      { name: '💍 Casamento',    value: 'Propor, aceitar ou divorciar',       inline: true },
+      { name: '🏛️ Guilda',       value: 'Crie ou gerencie sua guilda',        inline: true },
+    )
+    .setFooter({ text: '⚔️ Aliança Skyline RPG • Use os botões abaixo para navegar' });
 }
 
 export function buildCidadeButtons(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:loja').setLabel('🛒 Loja').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('rpg:curandeiro').setLabel('🏥 Curar').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('rpg:curandeiro').setLabel('🏥 Curar HP').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('rpg:forja').setLabel('⚒️ Forja').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('rpg:worldboss').setLabel('🐉 Boss Mundial').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('rpg:casamento').setLabel('💍 Casar').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:worldboss').setLabel('🐉 Boss').setStyle(ButtonStyle.Danger),
   );
 }
 
 export function buildCidadeButtons2(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:forja').setLabel('⚒️ Forja').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:arena').setLabel('⚔️ Arena PvP').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('rpg:casamento').setLabel('💍 Casar').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:guild').setLabel('🏛️ Guilda').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(ButtonStyle.Secondary),
   );
 }
 
