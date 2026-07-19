@@ -668,61 +668,110 @@ async function transferirMoedas(i: ModalSubmitInteraction) {
 }
 
 // ── Cargo Menu — criar e adicionar cargos ────────────────────────────────────
-async function handleCargoMenu(i: ModalSubmitInteraction, action: string, parts: string[]) {
+async function handleCargoMenu(i: ModalSubmitInteraction, action: string, _parts: string[]) {
   if (!(await checkAdmin(i))) return;
   await i.deferReply({ ephemeral: true });
 
-  const guildId   = i.guildId!;
-  const channelId = i.channelId;
+  const guildId = i.guildId!;
+  const getField = (id: string) => { try { return i.fields.getTextInputValue(id).trim() || null; } catch { return null; } };
 
+  // Resolve o canal a partir do campo 'canal' do modal (sempre obrigatório)
+  const rawCanal = (getField('canal') ?? '').replace(/[<#>]/g, '');
+  const channelId = rawCanal || i.channelId;
+  const targetChannel = i.guild?.channels.cache.get(channelId) as TextChannel | undefined;
+
+  // ── Criar Menu ───────────────────────────────────────────────────────
   if (action === 'criar') {
-    const titulo   = i.fields.getTextInputValue('titulo').trim();
-    const descricao = (() => { try { return i.fields.getTextInputValue('descricao').trim() || null; } catch { return null; } })();
-
-    await prisma.selfRoleMenu.create({
-      data: { guildId, channelId, title: titulo, description: descricao },
-    });
-
+    if (!targetChannel) {
+      return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `O canal \`${channelId}\` não existe neste servidor.`)] });
+    }
+    const titulo   = getField('titulo')!;
+    const descricao = getField('descricao');
+    await prisma.selfRoleMenu.create({ data: { guildId, channelId, title: titulo, description: descricao } });
     return i.editReply({
-      embeds: [new EmbedBuilder()
-        .setColor(0x2ECC71)
-        .setTitle('✅ Menu Criado!')
-        .setDescription(
-          `Menu **${titulo}** criado neste canal.\n\n` +
-          `Use \`/cargo-menu adicionar-cargo\` para adicionar cargos ao menu,\n` +
-          `depois \`/cargo-menu publicar\` para enviar a mensagem ao canal.`
-        )
-      ],
+      embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Menu Criado!')
+        .setDescription(`Menu **${titulo}** criado para ${targetChannel}.\n\nAgora clique em **➕ Adicionar Cargo** no painel para adicionar cargos, depois em **📤 Publicar** para enviar ao canal.`)],
     });
   }
 
+  // ── Adicionar Cargo ──────────────────────────────────────────────────
   if (action === 'adicionar') {
-    const menuId = parts[2];
-    const rawId  = i.fields.getTextInputValue('role_id').trim().replace(/[<@&>]/g, '');
-    const label  = i.fields.getTextInputValue('label').trim();
-    const emoji  = (() => { try { return i.fields.getTextInputValue('emoji').trim() || null; } catch { return null; } })();
-
+    const menu = await prisma.selfRoleMenu.findFirst({
+      where: { guildId, channelId },
+      include: { entries: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!menu) {
+      return i.editReply({ embeds: [errorEmbed('Sem Menu', `Nenhum menu encontrado para <#${channelId}>. Crie um primeiro.`)] });
+    }
+    if (menu.entries.length >= 25) {
+      return i.editReply({ embeds: [errorEmbed('Limite', 'Um menu pode ter no máximo 25 cargos.')] });
+    }
+    const rawId = (getField('role_id') ?? '').replace(/[<@&>]/g, '');
+    const label = getField('label')!;
+    const emoji = getField('emoji');
     if (!/^\d{17,20}$/.test(rawId)) {
       return i.editReply({ embeds: [errorEmbed('ID Inválido', 'Informe o ID numérico do cargo (17-20 dígitos).')] });
     }
-
     const role = i.guild?.roles.cache.get(rawId);
     if (!role) {
       return i.editReply({ embeds: [errorEmbed('Cargo não encontrado', `O cargo \`${rawId}\` não existe neste servidor.`)] });
     }
-
-    await prisma.selfRoleEntry.create({ data: { menuId, roleId: rawId, label, emoji } });
-
-    const count = await prisma.selfRoleEntry.count({ where: { menuId } });
+    await prisma.selfRoleEntry.create({ data: { menuId: menu.id, roleId: rawId, label, emoji } });
+    const count = await prisma.selfRoleEntry.count({ where: { menuId: menu.id } });
     return i.editReply({
-      embeds: [new EmbedBuilder()
-        .setColor(0x2ECC71)
-        .setTitle('✅ Cargo Adicionado!')
-        .setDescription(
-          `${emoji ?? '🏷️'} **${label}** → ${role} adicionado ao menu.\n` +
-          `Total: **${count}** cargo(s). Use \`/cargo-menu publicar\` para atualizar o menu.`
-        )
-      ],
+      embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Cargo Adicionado!')
+        .setDescription(`${emoji ?? '🏷️'} **${label}** → ${role} adicionado.\nTotal: **${count}** cargo(s). Use **📤 Publicar** para atualizar o menu em <#${channelId}>.`)],
     });
+  }
+
+  // ── Publicar Menu ────────────────────────────────────────────────────
+  if (action === 'publicar') {
+    if (!targetChannel) {
+      return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `O canal \`${channelId}\` não existe neste servidor.`)] });
+    }
+    const menu = await prisma.selfRoleMenu.findFirst({
+      where: { guildId, channelId },
+      include: { entries: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!menu) {
+      return i.editReply({ embeds: [errorEmbed('Sem Menu', `Nenhum menu encontrado para ${targetChannel}. Crie um primeiro.`)] });
+    }
+    if (!menu.entries.length) {
+      return i.editReply({ embeds: [errorEmbed('Menu Vazio', 'Adicione pelo menos um cargo antes de publicar.')] });
+    }
+    const { buildMenuMessage } = await import('../utils/selfRole');
+    const msgData = buildMenuMessage(menu);
+    const ch = targetChannel as any;
+    if (menu.messageId) {
+      try {
+        const msg = await ch.messages.fetch(menu.messageId);
+        await msg.edit(msgData);
+        return i.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setDescription(`✅ Menu **${menu.title}** atualizado em ${targetChannel}!`)] });
+      } catch { /* mensagem deletada, enviar nova */ }
+    }
+    const msg = await ch.send(msgData);
+    await prisma.selfRoleMenu.update({ where: { id: menu.id }, data: { messageId: msg.id } });
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setDescription(`✅ Menu **${menu.title}** publicado em ${targetChannel} com **${menu.entries.length}** cargo(s)!`)] });
+  }
+
+  // ── Remover Cargo ────────────────────────────────────────────────────
+  if (action === 'remover') {
+    const menu = await prisma.selfRoleMenu.findFirst({
+      where: { guildId, channelId },
+      include: { entries: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!menu) {
+      return i.editReply({ embeds: [errorEmbed('Sem Menu', `Nenhum menu encontrado para <#${channelId}>.`)] });
+    }
+    const rawId = (getField('role_id') ?? '').replace(/[<@&>]/g, '');
+    const entry = menu.entries.find(e => e.roleId === rawId);
+    if (!entry) {
+      return i.editReply({ embeds: [errorEmbed('Não Encontrado', `O cargo \`${rawId}\` não está neste menu.`)] });
+    }
+    await prisma.selfRoleEntry.delete({ where: { id: entry.id } });
+    return i.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setDescription(`✅ Cargo removido do menu. Use **📤 Publicar** para atualizar a mensagem em <#${channelId}>.`)] });
   }
 }

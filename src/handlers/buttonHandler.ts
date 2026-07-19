@@ -521,6 +521,80 @@ async function adminButtons(i: ButtonInteraction, action: string) {
     );
     return i.showModal(modal);
   }
+
+  // ── Registro de Cargos ────────────────────────────────────────────────
+  if (action === 'cargo_menu') {
+    const menus = await prisma.selfRoleMenu.findMany({
+      where: { guildId: guild.id },
+      include: { entries: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('🎭 Registro de Cargos')
+      .setDescription(
+        'Crie menus onde membros escolhem seus próprios cargos com um clique.\n\n' +
+        (menus.length
+          ? menus.map(m => `**${m.title}** — <#${m.channelId}> — ${m.entries.length} cargo(s)${m.messageId ? ' ✅' : ' ⏳'}`).join('\n')
+          : '*Nenhum menu criado ainda.*')
+      );
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('admin:cargo_criar').setLabel('Criar Menu').setEmoji('🆕').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('admin:cargo_adicionar').setLabel('Adicionar Cargo').setEmoji('➕').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('admin:cargo_publicar').setLabel('Publicar').setEmoji('📤').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('admin:cargo_remover').setLabel('Remover Cargo').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+    );
+    return i.reply({ embeds: [embed], components: [row], ephemeral: true });
+  }
+
+  if (action === 'cargo_criar') {
+    const modal = new ModalBuilder().setCustomId('cargo_menu:criar').setTitle('Criar Menu de Cargos');
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal onde publicar o menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 123456789012345678')),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título do menu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100).setPlaceholder('Ex: 🎭 Escolha seus cargos')),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição (opcional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
+    );
+    return i.showModal(modal);
+  }
+
+  if (action === 'cargo_adicionar') {
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    if (!menus.length) {
+      return i.reply({ embeds: [errorEmbed('Sem Menus', 'Crie um menu primeiro clicando em **🆕 Criar Menu**.')], ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId('cargo_menu:adicionar').setTitle('Adicionar Cargo ao Menu');
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('role_id').setLabel('ID do Cargo').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 123456789012345678')),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('label').setLabel('Nome do botão').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(80)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('emoji').setLabel('Emoji (opcional)').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(4)),
+    );
+    return i.showModal(modal);
+  }
+
+  if (action === 'cargo_publicar') {
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    if (!menus.length) {
+      return i.reply({ embeds: [errorEmbed('Sem Menus', 'Crie um menu primeiro.')], ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId('cargo_menu:publicar').setTitle('Publicar Menu de Cargos');
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu a publicar').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
+    );
+    return i.showModal(modal);
+  }
+
+  if (action === 'cargo_remover') {
+    const menus = await prisma.selfRoleMenu.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: 'desc' } });
+    if (!menus.length) {
+      return i.reply({ embeds: [errorEmbed('Sem Menus', 'Nenhum menu existente.')], ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId('cargo_menu:remover').setTitle('Remover Cargo do Menu');
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal').setLabel('ID do canal do menu').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(menus[0].channelId)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('role_id').setLabel('ID do cargo a remover').setStyle(TextInputStyle.Short).setRequired(true)),
+    );
+    return i.showModal(modal);
+  }
 }
 
 // ─── MOD BUTTONS ─────────────────────────────────────────────────────────────

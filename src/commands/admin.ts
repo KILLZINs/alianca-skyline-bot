@@ -25,6 +25,7 @@ export default {
         { name: '🎯 Recompensas de Nível',value: 'Cargos automáticos por nível',      inline: true },
         { name: '📈 Estatísticas',        value: 'Stats detalhados do servidor',       inline: true },
         { name: '🔨 Moderação',           value: 'Ações de moderação rápida',          inline: true },
+        { name: '🎭 Registro de Cargos',  value: 'Menus de auto-cargo para membros',   inline: true },
         ...(showAllowlist ? [{ name: '🌐 Acesso (Allowlist)', value: 'Servidores e managers autorizados', inline: true }] : []),
       )
       .setTimestamp()
@@ -46,6 +47,7 @@ export default {
       new ButtonBuilder().setCustomId('admin:economia').setLabel('Economia').setEmoji('🪙').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('admin:loja').setLabel('Loja').setEmoji('🛍️').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('admin:rank').setLabel('Definir Rank').setEmoji('👑').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('admin:cargo_menu').setLabel('Registro de Cargos').setEmoji('🎭').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('admin:stats').setLabel('Estatísticas').setEmoji('📈').setStyle(ButtonStyle.Secondary),
     );
 
