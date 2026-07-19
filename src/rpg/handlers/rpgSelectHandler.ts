@@ -22,6 +22,26 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
   const username  = i.user.username;
 
   try {
+    // ── Casos com parâmetros dinâmicos (antes do switch) ─────────────────
+    if (action.startsWith('worldboss_level')) {
+      await i.deferUpdate();
+      const templateIndex = parseInt(action.split(':')[1] ?? '0', 10);
+      const level = parseInt(i.values[0], 10);
+      const { spawnWorldBoss } = await import('../services/worldBoss');
+      const result = await spawnWorldBoss(i.guildId ?? '', templateIndex, level);
+      const { buildWorldBossEmbed, buildWorldBossButtons } = await import('../panels/worldBoss');
+      const guildId = i.guildId ?? '';
+      const [bossEmbed, bossButtons] = await Promise.all([
+        buildWorldBossEmbed(guildId),
+        buildWorldBossButtons(guildId, true),
+      ]);
+      const feedbackEmbed = result.success
+        ? (await import('../../utils/embeds')).successEmbed('🐉 Boss Invocado!', result.message)
+        : (await import('../../utils/embeds')).errorEmbed('Erro', result.message);
+      await i.editReply({ embeds: [feedbackEmbed, bossEmbed], components: bossButtons });
+      return;
+    }
+
     switch (action) {
 
       // ── Distribuir ponto de stat ─────────────────────────────────────────
@@ -229,6 +249,56 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
           embeds: [buildProfileEmbed(updated, stats)],
           components: buildProfileButtons(updated),
         });
+        break;
+      }
+
+      // ── Boss Mundial: escolher template ─────────────────────────────────
+      case 'worldboss_template': {
+        await i.deferUpdate();
+        const templateIndex = parseInt(i.values[0], 10);
+        const { buildWorldBossLevelSelect, WORLD_BOSS_TEMPLATES } = await import('../panels/worldBoss');
+        const { EmbedBuilder } = await import('discord.js');
+        const template = WORLD_BOSS_TEMPLATES[templateIndex];
+        const step2Embed = new EmbedBuilder()
+          .setColor(0xE74C3C)
+          .setTitle(`🐉 Invocar Boss Mundial — Passo 2`)
+          .setDescription(`**${template?.emoji} ${template?.name}** selecionado!\n\nEscolha a dificuldade (nível):`)
+          .addFields({ name: '📋 Habilidades', value: template?.abilities.join('\n') ?? '-' });
+        await i.editReply({ embeds: [step2Embed], components: [buildWorldBossLevelSelect(templateIndex)] });
+        break;
+      }
+
+      // worldboss_level handled below via startsWith check
+
+      // ── Missões: coletar recompensa ───────────────────────────────────────
+      case 'missao_coletar': {
+        await i.deferUpdate();
+        const [missionType, missionId] = i.values[0].split(':');
+        const guildId = i.guildId ?? '';
+        let result: { success: boolean; message: string; xp?: number; coins?: number };
+
+        if (missionType === 'daily') {
+          const { claimDailyReward } = await import('../../commands/utility/missoes');
+          result = await claimDailyReward(missionId, discordId, guildId);
+        } else {
+          const { claimWeeklyReward } = await import('../../commands/utility/missoes');
+          result = await claimWeeklyReward(missionId, discordId);
+        }
+
+        const { ensureDailyMissions, ensureWeeklyMissions } = await import('../../commands/utility/missoes');
+        const { buildMissoesEmbed, buildMissoesClaimSelect, buildMissoesButtons } = await import('../panels/missoes');
+        await Promise.all([ensureDailyMissions(discordId, guildId), ensureWeeklyMissions(discordId, guildId)]);
+        const [missoesEmbed, claimSelect] = await Promise.all([
+          buildMissoesEmbed(discordId, guildId),
+          buildMissoesClaimSelect(discordId, guildId),
+        ]);
+
+        const feedbackEmbed = result.success
+          ? (await import('../../utils/embeds')).successEmbed('🎁 Recompensa Coletada!', `${result.message}\n+**${result.xp}** XP | +**${result.coins}** 🪙`)
+          : (await import('../../utils/embeds')).errorEmbed('Erro', result.message);
+
+        const missaoRows: any[] = claimSelect ? [claimSelect, buildMissoesButtons()] : [buildMissoesButtons()];
+        await i.editReply({ embeds: [feedbackEmbed, missoesEmbed], components: missaoRows });
         break;
       }
 

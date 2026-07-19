@@ -6,12 +6,18 @@ import { xpForNextLevel } from '../types';
 import { prisma } from '../database/client';
 
 // BUG FIX: cooldown por guildId:userId em vez de só userId
-// (evita que XP de um servidor bloqueie o de outro)
 const cooldowns  = new Map<string, number>();
 const spamTrack  = new Map<string, { count: number; reset: number }>();
 const linkRegex  = /https?:\/\/|discord\.gg\//i;
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+function thisWeek() {
+  const now  = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const week = Math.ceil(((now.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${week.toString().padStart(2, '0')}`;
+}
 
 export default {
   name: 'messageCreate',
@@ -59,7 +65,7 @@ export default {
       }
     }
 
-    // ─── XP cooldown — BUG FIX: chave por guildId:userId ─────────────────────
+    // ─── XP cooldown — chave por guildId:userId ───────────────────────────────
     const now       = Date.now();
     const cdKey     = `${guildId}:${authorId}`;
     const cooldownMs = (config.xpCooldown ?? 60) * 1000;
@@ -70,7 +76,6 @@ export default {
     const xpMax  = config.xpMax ?? 25;
     const xpGain = Math.floor(Math.random() * (xpMax - xpMin + 1)) + xpMin;
 
-    // BUG FIX: garantir que member existe no DB antes de tentar update
     const before = await prisma.member.findUnique({ where: { discordId: authorId } });
     const after  = await addXp(authorId, message.author.username, xpGain);
 
@@ -79,7 +84,10 @@ export default {
 
     // ─── Mission progress ─────────────────────────────────────────────────────
     const dateStr = today();
+    const weekStr = thisWeek();
+
     await Promise.all([
+      // Diárias
       prisma.dailyMission.updateMany({
         where: { memberId: authorId, guildId, type: 'estar_online',     dateStr, completed: false },
         data:  { progress: 1, completed: true },
@@ -92,9 +100,18 @@ export default {
         where: { memberId: authorId, guildId, type: 'ganhar_xp',        dateStr, completed: false },
         data:  { progress: { increment: xpGain } },
       }),
+      // Semanais
+      prisma.weeklyMission.updateMany({
+        where: { memberId: authorId, guildId, type: 'enviar_mensagens_sem', weekStr, completed: false },
+        data:  { progress: { increment: 1 } },
+      }),
+      prisma.weeklyMission.updateMany({
+        where: { memberId: authorId, guildId, type: 'ganhar_xp_semanal', weekStr, completed: false },
+        data:  { progress: { increment: xpGain } },
+      }),
     ]).catch(() => null);
 
-    // Marcar missões concluídas
+    // Marcar missões concluídas (diárias)
     prisma.dailyMission.findMany({ where: { memberId: authorId, guildId, dateStr, completed: false } })
       .then(pending => Promise.all(
         pending.filter(m => m.progress >= m.target).map(m =>
@@ -102,9 +119,16 @@ export default {
         )
       )).catch(() => null);
 
+    // Marcar missões concluídas (semanais)
+    prisma.weeklyMission.findMany({ where: { memberId: authorId, guildId, weekStr, completed: false } })
+      .then(pending => Promise.all(
+        pending.filter(m => m.progress >= m.target).map(m =>
+          prisma.weeklyMission.update({ where: { id: m.id }, data: { completed: true } })
+        )
+      )).catch(() => null);
+
     // ─── Level up ─────────────────────────────────────────────────────────────
     if (before && after.level > before.level) {
-      // Recompensa de nível
       prisma.levelReward.findUnique({ where: { guildId_level: { guildId, level: after.level } } })
         .then(async reward => {
           if (!reward) return;

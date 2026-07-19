@@ -16,6 +16,45 @@ export async function handleRpgModal(i: ModalSubmitInteraction, action: string):
   try {
     switch (action) {
 
+      // ── Proposta de Casamento ────────────────────────────────────────────
+      case 'casamento_propor': {
+        await i.deferReply({ ephemeral: true });
+        const targetIdRaw = i.fields.getTextInputValue('target_id').trim().replace(/[<@>]/g, '');
+        const mensagem    = (() => { try { return i.fields.getTextInputValue('mensagem').trim(); } catch { return ''; } })();
+
+        if (!/^\d{17,20}$/.test(targetIdRaw)) {
+          await i.editReply({ embeds: [errorEmbed('ID Inválido', 'Por favor insira um ID Discord válido (17-20 dígitos).')] });
+          return;
+        }
+
+        const { proposeMarriage } = await import('../services/marriage');
+        const result = await proposeMarriage(discordId, targetIdRaw, i.guildId ?? '');
+
+        if (result.success) {
+          // Notificar o alvo via DM
+          try {
+            const targetUser = await i.client.users.fetch(targetIdRaw);
+            const { EmbedBuilder } = await import('discord.js');
+            const dmEmbed = new EmbedBuilder()
+              .setColor(0xFF69B4)
+              .setTitle('💍 Pedido de Casamento!')
+              .setDescription(
+                `**${i.user.username}** te pediu em casamento! 💕\n\n` +
+                (mensagem ? `*"${mensagem}"*\n\n` : '') +
+                'Acesse o painel de **💍 Casamento** via `/rpg` para aceitar ou recusar.'
+              )
+              .setThumbnail(i.user.displayAvatarURL())
+              .setFooter({ text: '⚔️ Aliança Skyline RPG — Você tem 24h para responder' });
+            await targetUser.send({ embeds: [dmEmbed] });
+          } catch { /* DMs fechadas */ }
+
+          await i.editReply({ embeds: [successEmbed('💍 Proposta Enviada!', result.message)] });
+        } else {
+          await i.editReply({ embeds: [errorEmbed('Erro', result.message)] });
+        }
+        break;
+      }
+
       // ── Criar Guilda ────────────────────────────────────────────────────
       case 'guild_criar': {
         await i.deferReply({ ephemeral: true });

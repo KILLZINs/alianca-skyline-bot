@@ -39,16 +39,24 @@ export function buildEmbedsHome(): { embed: EmbedBuilder; rows: ActionRowBuilder
       'Selecione uma categoria para começar:'
     )
     .addFields(
-      { name: '🎯 Geral', value: 'Boas-vindas, Level Up, Roleplay, Painel', inline: true },
-      { name: '⚔️ RPG',   value: 'Vitória, Derrota, Empate no combate',    inline: true },
-      { name: '🌐 Aliança', value: 'Embed oficial da aliança',              inline: true },
+      { name: '🎯 Geral',        value: 'Boas-vindas, Level Up, Roleplay, Painel',       inline: true },
+      { name: '⚔️ RPG',          value: 'Vitória, Derrota, Empate no combate',           inline: true },
+      { name: '🐉 Boss Mundial',  value: 'Spawn, Derrota e Expiração do Boss Mundial',   inline: true },
+      { name: '💍 Casamento',     value: 'Proposta, Casamento e Divórcio',               inline: true },
+      { name: '📋 Missões',       value: 'Missão diária e semanal concluída',            inline: true },
+      { name: '🌐 Aliança',       value: 'Embed oficial da aliança',                     inline: true },
     );
 
   const rows = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('embeds:cat|geral').setLabel('🎯 Geral').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('embeds:cat|rpg').setLabel('⚔️ RPG').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('embeds:cat|alianca').setLabel('🌐 Aliança').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('embeds:cat|bossmundial').setLabel('🐉 Boss').setStyle(ButtonStyle.Danger),
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('embeds:cat|casamento').setLabel('💍 Casamento').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('embeds:cat|missoes').setLabel('📋 Missões').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('embeds:cat|alianca').setLabel('🌐 Aliança').setStyle(ButtonStyle.Secondary),
     ),
   ];
 
@@ -68,7 +76,6 @@ function buildCategoryPanel(category: string): { embed: EmbedBuilder; rows: Acti
       return { name: e.label + (hasConfig ? ' ✅' : ''), value: e.desc, inline: false };
     }));
 
-  // Botões de embeds (Discord permite 5 por row, 5 rows = 25 max)
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   for (let i = 0; i < entries.length; i += 4) {
     const chunk = entries.slice(i, i + 4);
@@ -77,8 +84,8 @@ function buildCategoryPanel(category: string): { embed: EmbedBuilder; rows: Acti
         chunk.map(([key, e]) =>
           new ButtonBuilder()
             .setCustomId(`embeds:edit|${key}`)
-            .setLabel(e.label.replace(/^[^\s]+\s/, '')) // remove emoji prefix for short label
-            .setStyle(ButtonStyle.Secondary)
+            .setLabel(e.label.replace(/^[^\s]+\s/, ''))
+            .setStyle(ButtonStyle.Primary)
         )
       )
     );
@@ -97,157 +104,178 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
   const info = EMBED_CATALOG[key];
   const tpl  = getTemplate(key);
 
-  const lines = ALL_FIELDS.map(f => {
-    const meta = FIELD_META[f];
-    let val: string;
-    if (!tpl || tpl[f as keyof typeof tpl] === null || tpl[f as keyof typeof tpl] === undefined) {
-      val = '**(padrão)**';
-    } else {
-      const raw = tpl[f as keyof typeof tpl] as string | number;
-      val = f === 'color' ? intToHex(raw as number) : `\`${String(raw).slice(0, 60)}${String(raw).length > 60 ? '…' : ''}\``;
-    }
-    return `${meta.emoji} **${meta.label}:** ${val}`;
-  });
+  const embed = baseEmbed(COLORS.WARNING)
+    .setTitle(`✏️ Editar: ${info?.label ?? key}`)
+    .setDescription(`Personalize os campos do embed **${info?.label ?? key}**.`)
+    .addFields(
+      ALL_FIELDS.map(field => {
+        const meta  = FIELD_META[field];
+        const value = tpl?.[field as keyof typeof tpl];
+        const display = field === 'color' && value ? intToHex(value as number) : (value ?? '*(padrão)*');
+        return { name: `${meta.emoji} ${meta.label}`, value: `${display}`, inline: true };
+      })
+    );
 
-  const embed = baseEmbed(COLORS.GOLD)
-    .setTitle(`✏️ ${info?.label ?? key}`)
-    .setDescription(`${info?.desc ?? ''}\n\n**Valores atuais:**\n${lines.join('\n')}`);
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      ALL_FIELDS.slice(0, 4).map(field =>
+        new ButtonBuilder()
+          .setCustomId(`embeds:field|${key}|${field}`)
+          .setLabel(`${FIELD_META[field].emoji} ${FIELD_META[field].label}`)
+          .setStyle(ButtonStyle.Secondary)
+      )
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      [
+        ...ALL_FIELDS.slice(4).map(field =>
+          new ButtonBuilder()
+            .setCustomId(`embeds:field|${key}|${field}`)
+            .setLabel(`${FIELD_META[field].emoji} ${FIELD_META[field].label}`)
+            .setStyle(ButtonStyle.Secondary)
+        ),
+        new ButtonBuilder()
+          .setCustomId(`embeds:reset|${key}`)
+          .setLabel('🗑️ Resetar Tudo')
+          .setStyle(ButtonStyle.Danger),
+      ]
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`embeds:cat|${info?.category ?? 'geral'}`)
+        .setLabel('◀ Voltar')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  ];
 
-  // Row 1: title, description, color
-  // Row 2: thumbnailUrl, imageUrl
-  // Row 3: footerText, footerIcon
-  // Row 4: clear, back
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|title`).setLabel('📌 Título').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|description`).setLabel('📄 Descrição').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|color`).setLabel('🎨 Cor').setStyle(ButtonStyle.Primary),
-  );
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|thumbnailUrl`).setLabel('🖼️ Thumbnail').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|imageUrl`).setLabel('🖼️ Imagem').setStyle(ButtonStyle.Secondary),
-  );
-  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|footerText`).setLabel('📝 Rodapé').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`embeds:setfield|${key}|footerIcon`).setLabel('🔗 Ícone Rodapé').setStyle(ButtonStyle.Secondary),
-  );
-  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`embeds:clear|${key}`).setLabel('🗑️ Limpar Tudo').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`embeds:cat|${info?.category ?? 'geral'}`).setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
-  );
-
-  return { embed, rows: [row1, row2, row3, row4] };
-}
-
-
-// ══════════════════════════════════════════════════════════════════════
-// BUTTON HANDLER (usa interaction.update / showModal diretamente)
-// ══════════════════════════════════════════════════════════════════════
-
-export async function handleEmbedsButtonRaw(interaction: ButtonInteraction): Promise<void> {
-  if (!await isBotManager(interaction.user.id)) {
-    await interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
-    return;
-  }
-
-  const [, rest] = interaction.customId.split(':');
-  const [action, ...args] = rest.split('|');
-
-  if (action === 'home') {
-    const { embed, rows } = buildEmbedsHome();
-    await interaction.update({ embeds: [embed], components: rows });
-    return;
-  }
-
-  if (action === 'cat') {
-    const { embed, rows } = buildCategoryPanel(args[0]);
-    await interaction.update({ embeds: [embed], components: rows });
-    return;
-  }
-
-  if (action === 'edit') {
-    const key = args[0];
-    const { embed, rows } = buildEditPanel(key);
-    await interaction.update({ embeds: [embed], components: rows });
-    return;
-  }
-
-  if (action === 'setfield') {
-    const [key, field] = args;
-    const meta = FIELD_META[field];
-    if (!meta) {
-      await interaction.reply({ content: '❌ Campo inválido.', ephemeral: true });
-      return;
-    }
-
-    const tpl     = getTemplate(key);
-    const current = tpl ? (tpl[field as keyof typeof tpl] as string | number | null) : null;
-    const currentStr = current === null || current === undefined
-      ? ''
-      : field === 'color' ? intToHex(current as number) : String(current);
-
-    const modal = new ModalBuilder()
-      .setCustomId(`embeds_modal:${key}|${field}`)
-      .setTitle(`${meta.emoji} ${meta.label} — ${EMBED_CATALOG[key]?.label ?? key}`);
-
-    const input = new TextInputBuilder()
-      .setCustomId('value')
-      .setLabel(meta.label)
-      .setStyle(meta.style)
-      .setPlaceholder(meta.placeholder)
-      .setMaxLength(meta.max)
-      .setRequired(false);
-
-    if (currentStr) input.setValue(currentStr);
-
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
-    await interaction.showModal(modal);
-    return;
-  }
-
-  if (action === 'clear') {
-    const key = args[0];
-    await clearTemplate(key);
-    const { embed, rows } = buildEditPanel(key);
-    await interaction.update({ embeds: [embed], components: rows });
-    return;
-  }
+  return { embed, rows };
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// MODAL HANDLER
+// BUTTON HANDLER (raw — já é chamado com o interaction completo)
 // ══════════════════════════════════════════════════════════════════════
 
-export async function handleEmbedsModal(interaction: ModalSubmitInteraction): Promise<void> {
-  if (!await isBotManager(interaction.user.id)) {
-    await interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void> {
+  if (!await isBotManager(i.user.id)) {
+    await i.reply({ embeds: [errorEmbed('Sem permissão', 'Apenas gerenciadores do bot podem usar.')], ephemeral: true });
     return;
   }
 
-  // Parse: embeds_modal:<key>|<field>
-  const [, rest] = interaction.customId.split(':');
-  const [key, field] = rest.split('|');
+  const raw    = i.customId.replace(/^embeds:/, '');
+  const [op, ...rest] = raw.split('|');
 
-  const rawValue = interaction.fields.getTextInputValue('value').trim();
+  try {
+    switch (op) {
 
-  await interaction.deferUpdate();
+      case 'home': {
+        await i.deferUpdate();
+        const { embed, rows } = buildEmbedsHome();
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
 
-  if (!rawValue) {
-    // Campo vazio = limpar esse campo
-    await setTemplateField(key, field as keyof Omit<EmbedTemplateData, 'key'>, null);
-  } else if (field === 'color') {
-    const colorInt = hexToInt(rawValue);
-    if (colorInt === null) {
-      await interaction.followUp({ content: '❌ Cor inválida. Use formato hex: `#RRGGBB` ou `RRGGBB`', ephemeral: true });
-    } else {
+      case 'cat': {
+        await i.deferUpdate();
+        const category = rest[0];
+        const { embed, rows } = buildCategoryPanel(category);
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
+
+      case 'edit': {
+        await i.deferUpdate();
+        const key = rest[0];
+        if (!EMBED_CATALOG[key]) {
+          await i.editReply({ embeds: [errorEmbed('Embed não encontrado', `Chave \`${key}\` inválida.`)] });
+          return;
+        }
+        const { embed, rows } = buildEditPanel(key);
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
+
+      case 'field': {
+        // Abrir modal para editar campo específico
+        const [key, field] = rest;
+        if (!EMBED_CATALOG[key] || !FIELD_META[field]) {
+          await i.reply({ embeds: [errorEmbed('Inválido', 'Campo ou embed inválido.')], ephemeral: true });
+          return;
+        }
+        const meta = FIELD_META[field];
+        const tpl  = getTemplate(key);
+        const current = field === 'color' && tpl?.color ? intToHex(tpl.color) : (tpl?.[field as keyof typeof tpl] ?? '') as string;
+
+        const modal = new ModalBuilder()
+          .setCustomId(`embedcfg:field|${key}|${field}`)
+          .setTitle(`${meta.emoji} Editar ${meta.label}`)
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel(meta.label)
+                .setStyle(meta.style)
+                .setRequired(false)
+                .setPlaceholder(meta.placeholder)
+                .setMaxLength(meta.max)
+                .setValue(current.toString().slice(0, meta.max))
+            )
+          );
+
+        await i.showModal(modal);
+        break;
+      }
+
+      case 'reset': {
+        await i.deferUpdate();
+        const key = rest[0];
+        await clearTemplate(key);
+        const { embed, rows } = buildEditPanel(key);
+        await i.editReply({ embeds: [successEmbed('✅ Resetado', `Template \`${key}\` restaurado para o padrão.`), embed], components: rows });
+        break;
+      }
+
+      default:
+        await i.reply({ embeds: [errorEmbed('Ação desconhecida', `Operação \`${op}\` não reconhecida.`)], ephemeral: true });
+    }
+  } catch (err) {
+    console.error('[EmbedsCfg Error]', err);
+    const errEmbed = errorEmbed('Erro', 'Ocorreu um erro ao processar.');
+    if (i.replied || i.deferred) await i.editReply({ embeds: [errEmbed] }).catch(() => null);
+    else await i.reply({ embeds: [errEmbed], ephemeral: true }).catch(() => null);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MODAL HANDLER (para submissão dos campos)
+// ══════════════════════════════════════════════════════════════════════
+
+export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string): Promise<void> {
+  if (!await isBotManager(i.user.id)) {
+    await i.reply({ embeds: [errorEmbed('Sem permissão', 'Apenas gerenciadores do bot podem usar.')], ephemeral: true });
+    return;
+  }
+
+  const [op, ...rest] = raw.split('|');
+
+  if (op === 'field') {
+    await i.deferUpdate();
+    const [key, field] = rest;
+    const rawValue = i.fields.getTextInputValue('value').trim();
+
+    if (!rawValue) {
+      // Limpar campo
+      await setTemplateField(key, field as any, null);
+    } else if (field === 'color') {
+      const colorInt = hexToInt(rawValue);
+      if (colorInt === null) {
+        await i.editReply({ embeds: [errorEmbed('Cor inválida', 'Use formato hex como `#9B59B6`.')] });
+        return;
+      }
       await setTemplateField(key, 'color', colorInt);
+    } else {
+      await setTemplateField(key, field as any, rawValue);
     }
-  } else {
-    await setTemplateField(key, field as keyof Omit<EmbedTemplateData, 'key'>, rawValue);
+
+    const { embed, rows } = buildEditPanel(key);
+    await i.editReply({ embeds: [successEmbed('✅ Salvo', `Campo **${FIELD_META[field]?.label ?? field}** atualizado!`), embed], components: rows });
   }
-
-  const { embed, rows } = buildEditPanel(key);
-  await interaction.editReply({ embeds: [embed], components: rows });
 }
-
-// Re-export type for imports
-import type { EmbedTemplateData } from '../utils/embedTemplates';

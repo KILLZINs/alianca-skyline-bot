@@ -27,8 +27,6 @@ model Member {
   @@map("members")
 }
 
-// ─── Allowlist ────────────────────────────────────────────────────────────────
-
 model AllowedGuild {
   id        String   @id @default(cuid())
   guildId   String   @unique
@@ -64,7 +62,6 @@ model ServerStat {
   @@map("server_stats")
 }
 
-// Achievements earned by a specific member
 model Achievement {
   id          String   @id @default(cuid())
   memberId    String
@@ -78,7 +75,6 @@ model Achievement {
   @@map("achievements")
 }
 
-// Templates defined by admins per guild
 model AchievementTemplate {
   id          String   @id @default(cuid())
   guildId     String
@@ -251,6 +247,25 @@ model DailyMission {
   @@map("daily_missions")
 }
 
+// ─── NOVO: Missões Semanais ───────────────────────────────────────────
+
+model WeeklyMission {
+  id         String  @id @default(cuid())
+  memberId   String
+  guildId    String
+  type       String
+  target     Int
+  progress   Int     @default(0)
+  completed  Boolean @default(false)
+  claimed    Boolean @default(false)
+  xpReward   Int
+  coinReward Int
+  weekStr    String
+
+  @@unique([memberId, guildId, type, weekStr])
+  @@map("weekly_missions")
+}
+
 model GuildConfig {
   id                    String   @id @default(cuid())
   guildId               String   @unique
@@ -289,8 +304,6 @@ model LevelReward {
   @@map("level_rewards")
 }
 
-
-
 // ═══════════════════════════════════════════════════════════════════════
 // RPG MODELS
 // ═══════════════════════════════════════════════════════════════════════
@@ -304,60 +317,51 @@ model RpgCharacter {
   generation    Int      @default(1)
   gold          Int      @default(100)
 
-  // HP e Energia
   currentHp     Int      @default(100)
   maxHp         Int      @default(100)
   currentEnergy Int      @default(50)
   maxEnergy     Int      @default(50)
 
-  // Atributos base (pontos distribuídos pelo jogador)
   strength      Int      @default(10)
   agility       Int      @default(10)
   intelligence  Int      @default(10)
   vitality      Int      @default(10)
   luck          Int      @default(10)
 
-  // Pontos disponíveis
   statPoints    Int      @default(0)
   skillPoints   Int      @default(0)
 
-  // Habilidade divina
-  divineSkillId   String? 
+  divineSkillId   String?
   divineSkillRank String  @default("F")
   divineSkillExp  Int     @default(0)
 
-  // Localização e ambiente
   currentLocation String  @default("cidade_inicial")
   environment     String  @default("DIA")
 
-  // Karma e PvP
   karma         Int     @default(0)
   pvpEnabled    Boolean @default(true)
   pvpWins       Int     @default(0)
   pvpLosses     Int     @default(0)
 
-  // Estatísticas gerais
   totalKills    Int     @default(0)
   totalDeaths   Int     @default(0)
   totalWins     Int     @default(0)
   bossKills     Int     @default(0)
 
-  // Timestamps
   lastDungeon    DateTime?
   lastTravel     DateTime?
   lastPvp        DateTime?
   lastRest       DateTime?
-  lastEnergyTick DateTime?   // usado para regen passiva de energia
+  lastEnergyTick DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Relações
-  equipment     RpgEquipment?
-  inventory     RpgInventoryItem[]
+  equipment       RpgEquipment?
+  inventory       RpgInventoryItem[]
   guildMembership RpgGuildMember?
-  learnedSkills RpgLearnedSkill[]
-  combatLogs    RpgCombatLog[]
-  craftQueue    RpgCraftQueue[]
+  learnedSkills   RpgLearnedSkill[]
+  combatLogs      RpgCombatLog[]
+  craftQueue      RpgCraftQueue[]
 
   @@map("rpg_characters")
 }
@@ -438,8 +442,8 @@ model RpgLearnedSkill {
 model RpgCombatLog {
   id          String   @id @default(cuid())
   characterId String
-  type        String   // dungeon | boss | pvp
-  result      String   // vitoria | derrota | empate | fuga
+  type        String
+  result      String
   enemyName   String?
   opponentId  String?
   xpGained    Int      @default(0)
@@ -477,7 +481,70 @@ model RpgShopRotation {
   @@map("rpg_shop_rotation")
 }
 
-// ─── Aliança Skyline ──────────────────────────────────────────────────────────
+// ─── NOVO: Boss Mundial ───────────────────────────────────────────────
+
+model WorldBoss {
+  id          String   @id @default(cuid())
+  guildId     String
+  name        String
+  emoji       String   @default("🐉")
+  description String?
+  maxHp       Int
+  currentHp   Int
+  level       Int      @default(1)
+  status      String   @default("active")
+  xpReward    Int
+  goldReward  Int
+  spawnedAt   DateTime @default(now())
+  defeatedAt  DateTime?
+  expiresAt   DateTime
+
+  participants WorldBossParticipant[]
+
+  @@map("world_bosses")
+}
+
+model WorldBossParticipant {
+  id          String   @id @default(cuid())
+  bossId      String
+  discordId   String
+  username    String
+  damageDealt Int      @default(0)
+  hits        Int      @default(0)
+  lastHit     DateTime?
+
+  boss WorldBoss @relation(fields: [bossId], references: [id], onDelete: Cascade)
+
+  @@unique([bossId, discordId])
+  @@map("world_boss_participants")
+}
+
+// ─── NOVO: Casamento ──────────────────────────────────────────────────
+
+model Marriage {
+  id        String   @id @default(cuid())
+  userId1   String
+  userId2   String
+  marriedAt DateTime @default(now())
+
+  @@unique([userId1, userId2])
+  @@map("marriages")
+}
+
+model MarriageProposal {
+  id         String   @id @default(cuid())
+  proposerId String
+  targetId   String
+  guildId    String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@unique([proposerId, targetId])
+  @@map("marriage_proposals")
+}
+
+// ─── Aliança Skyline ──────────────────────────────────────────────────
 
 model AllianceServer {
   id          String   @id @default(cuid())
@@ -501,7 +568,7 @@ model AllianceServerMember {
   guildId  String
   userId   String
   username String?
-  role     String   // "owner" | "representative"
+  role     String
   addedAt  DateTime @default(now())
 
   server AllianceServer @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
@@ -538,17 +605,13 @@ model AllianceEmbed {
 model BotConfig {
   id           String   @id @default("global")
   footerText   String   @default("⚔️ Aliança Skyline")
-  primaryColor Int      @default(10180278)   // 0x9b59b6
+  primaryColor Int      @default(10180278)
   botIconUrl   String?
   rpFooterText String   @default("⚔️ Aliança Skyline • /genero para mudar seus pronomes")
   updatedAt    DateTime @updatedAt @default(now())
 
   @@map("bot_config")
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// EMBED TEMPLATES (customização total de embeds)
-// ═══════════════════════════════════════════════════════════════════════
 
 model EmbedTemplate {
   key          String   @id
