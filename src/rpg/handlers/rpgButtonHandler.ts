@@ -190,11 +190,11 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         const cost = Math.floor((hpMissing + enMissing) * 0.5);
 
         if (hpMissing === 0 && enMissing === 0) {
-          await i.editReply({ embeds: [infoEmbed('🏥 Curandeiro', 'Você já está com HP e Energia cheios!')] });
+          await i.editReply({ embeds: [infoEmbed('🏥 Curandeiro', '✅ Você já está com HP e Energia no máximo!')], components: [buildCidadeButtons(), buildCidadeButtons2()] });
           return;
         }
         if (char.gold < cost) {
-          await i.editReply({ embeds: [errorEmbed('Ouro Insuficiente', `Curar custa **${cost} ouro**. Você tem **${char.gold}**.`)] });
+          await i.editReply({ embeds: [errorEmbed('🏥 Ouro Insuficiente', `Curar custa **${cost} ouro**.\nVocê tem apenas **${char.gold} ouro**.\n\n❤️ HP faltando: **${hpMissing}** | ⚡ Energia faltando: **${enMissing}**`)], components: [buildCidadeButtons(), buildCidadeButtons2()] });
           return;
         }
 
@@ -485,6 +485,73 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
 
         const missaoRows: any[] = claimSelect ? [claimSelect, buildMissoesButtons()] : [buildMissoesButtons()];
         await i.editReply({ embeds: [missoesEmbed], components: missaoRows });
+        break;
+      }
+
+      // ── Estatísticas do Personagem ────────────────────────────────────────
+      case 'stats': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const stats = computeStats(char);
+        const totalBattles = char.totalWins + char.totalDeaths;
+        const winRate = totalBattles > 0 ? Math.round((char.totalWins / totalBattles) * 100) : 0;
+        const daysPlaying = Math.floor((Date.now() - char.createdAt.getTime()) / 86400000);
+        const pvpTotal = char.pvpWins + char.pvpLosses;
+        const pvpRate = pvpTotal > 0 ? Math.round((char.pvpWins / pvpTotal) * 100) : 0;
+
+        const { EmbedBuilder: StatsEB, ActionRowBuilder: StatsAR, ButtonBuilder: StatsBB, ButtonStyle: StatsBS } = await import('discord.js');
+        const { getClass: getClsStats } = await import('../constants/classes');
+        const clsStats = getClsStats(char.class);
+
+        const statsEmbed = new StatsEB()
+          .setColor(clsStats?.color ?? 0x2ECC71)
+          .setTitle(`📊 Estatísticas — ${char.username}`)
+          .setDescription(`${clsStats?.emoji ?? '⚔️'} **${clsStats?.name ?? char.class}** • Nível **${char.level}** • Geração **${char.generation}**`)
+          .addFields(
+            {
+              name: '⚔️ Batalhas PvE',
+              value: [
+                `Total: **${totalBattles}** batalhas`,
+                `Vitórias: **${char.totalWins}** | Derrotas: **${char.totalDeaths}**`,
+                `Taxa de vitória: **${winRate}%**`,
+              ].join('\n'),
+              inline: true,
+            },
+            {
+              name: '👹 Monstros',
+              value: `Mortos: **${char.totalKills}**\nBosses: **${char.bossKills}**`,
+              inline: true,
+            },
+            {
+              name: '⚔️ PvP',
+              value: `Vitórias: **${char.pvpWins}** / Derrotas: **${char.pvpLosses}**\nTaxa PvP: **${pvpRate}%**`,
+              inline: true,
+            },
+            {
+              name: '📈 Poder de Combate',
+              value: `**${stats.combatPower.toLocaleString('pt-BR')}** PC`,
+              inline: true,
+            },
+            {
+              name: '💰 Ouro em Carteira',
+              value: `**${char.gold.toLocaleString('pt-BR')}**`,
+              inline: true,
+            },
+            {
+              name: '📅 Na Aliança há',
+              value: `**${daysPlaying}** dia(s)`,
+              inline: true,
+            },
+          )
+          .setFooter({ text: `⚔️ Aliança Skyline RPG • Desde: ${char.createdAt.toISOString().slice(0, 10)}` });
+
+        await i.editReply({
+          embeds: [statsEmbed],
+          components: [new StatsAR<StatsBB>().addComponents(
+            new StatsBB().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(StatsBS.Secondary),
+            new StatsBB().setCustomId('rpg:stats').setLabel('🔄 Atualizar').setStyle(StatsBS.Secondary),
+          )],
+        });
         break;
       }
 
