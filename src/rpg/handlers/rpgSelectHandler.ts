@@ -93,7 +93,7 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
           await i.editReply({ embeds: [errorEmbed('Sem Energia ⚡', `Você tem apenas **${char.currentEnergy}** de energia — mínimo para batalhar é **10**.\nVá à 🏰 Cidade → 🏥 Curar para restaurar energia.`)], components: [] });
           return;
         }
-        const { embed, rows } = await doBattleEnemy(char, i.values[0]);
+        const { embed, rows } = await doBattleEnemy(char, i.values[0], i.guildId ?? '');
         await i.editReply({ embeds: [embed], components: rows });
         break;
       }
@@ -341,7 +341,7 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
         if (char.currentHp <= 0) { await i.editReply({ embeds: [errorEmbed('Sem HP', 'Cure-se antes de entrar na dungeon.')] }); break; }
         if (char.currentEnergy < 12) { await i.editReply({ embeds: [errorEmbed('Sem Energia ⚡', `Precisa de **12⚡** para entrar nesta dungeon. Você tem **${char.currentEnergy}⚡**.`)] }); break; }
         const { doBattleWithType, buildDungeonTypeEmbed, buildDungeonTypeSelect, buildDungeonTypeButtons } = await import('../panels/dungeon-tipo');
-        const { embed, rows } = await doBattleWithType(char, i.values[0], true);
+        const { embed, rows } = await doBattleWithType(char, i.values[0], true, undefined, i.guildId ?? '');
         await i.editReply({ embeds: [embed], components: rows });
         break;
       }
@@ -366,14 +366,14 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
       // ── 🌎 Evento mundial: iniciar ────────────────────────────────────────
       case 'evento_tipo': {
         await i.deferUpdate();
-        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
-        if (!isAdmin) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas administradores podem iniciar eventos.')] }); break; }
+        const { isBotOwner } = await import('../../utils/allowlist');
+        if (!isBotOwner(i.user.id)) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem iniciar eventos de mundo.')] }); break; }
         const guildId = i.guildId ?? '';
         const { startWorldEvent, buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
         const result = await startWorldEvent(guildId, i.values[0]);
         const active = await getActiveWorldEvent(guildId);
         const embed = await buildWorldEventsEmbed(guildId);
-        const btns = buildWorldEventsButtons(guildId, true, !!active);
+        const btns = buildWorldEventsButtons(guildId, true, !!active, active?.eventType);
         const fb = result.success
           ? (await import('../../utils/embeds')).successEmbed('🌎 Evento!', result.message)
           : (await import('../../utils/embeds')).errorEmbed('Evento', result.message);

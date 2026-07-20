@@ -91,15 +91,37 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         await i.deferUpdate();
         let char = await getOrCreateCharacter(discordId, username);
         char = await applyPassiveEnergyRegen(char);
+        const { buildDungeonTypeSelect } = await import('../panels/dungeon-tipo');
         const select = buildDungeonSelect(char);
+        const typeSelect = buildDungeonTypeSelect(char);
+        const dungeonRows: ActionRowBuilder<any>[] = [];
+        if (select) dungeonRows.push(select);
+        if (typeSelect) dungeonRows.push(typeSelect);
+        dungeonRows.push(buildDungeonButtons(char));
         await i.editReply({
           embeds: [buildDungeonEmbed(char)],
-          components: select ? [select, buildDungeonButtons(char)] : [buildDungeonButtons(char)],
+          components: dungeonRows,
         });
         break;
       }
 
       // ── Batalha rápida aleatória ──────────────────────────────────────────
+      case 'dungeon_tipo': {
+        // Dungeon+ está integrado ao painel normal de dungeon agora
+        await i.deferUpdate();
+        let char = await getOrCreateCharacter(discordId, username);
+        char = await applyPassiveEnergyRegen(char);
+        const { buildDungeonTypeSelect: buildTypeSelectAlias } = await import('../panels/dungeon-tipo');
+        const selectAlias = buildDungeonSelect(char);
+        const typeSelectAlias = buildTypeSelectAlias(char);
+        const rowsAlias: ActionRowBuilder<any>[] = [];
+        if (selectAlias) rowsAlias.push(selectAlias);
+        if (typeSelectAlias) rowsAlias.push(typeSelectAlias);
+        rowsAlias.push(buildDungeonButtons(char));
+        await i.editReply({ embeds: [buildDungeonEmbed(char)], components: rowsAlias });
+        break;
+      }
+
       case 'dungeon_aleatorio': {
         await i.deferUpdate();
         const char = await getOrCreateCharacter(discordId, username);
@@ -710,18 +732,19 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         await i.deferUpdate();
         const guildId = i.guildId ?? '';
         const { buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
+        const { isBotOwner } = await import('../../utils/allowlist');
         const active = await getActiveWorldEvent(guildId);
-        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
+        const isOwner = isBotOwner(discordId);
         const embed = await buildWorldEventsEmbed(guildId);
-        const btns = buildWorldEventsButtons(guildId, isAdmin, !!active);
+        const btns = buildWorldEventsButtons(guildId, isOwner, !!active, active?.eventType);
         await i.editReply({ embeds: [embed], components: btns });
         break;
       }
 
       case 'evento_iniciar': {
         await i.deferUpdate();
-        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
-        if (!isAdmin) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas administradores podem iniciar eventos.')] }); break; }
+        const { isBotOwner: isBotOwnerEvt } = await import('../../utils/allowlist');
+        if (!isBotOwnerEvt(discordId)) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem iniciar eventos de mundo.')] }); break; }
         const { buildEventStartSelect, buildWorldEventsEmbed } = await import('../panels/world-events');
         const guildId = i.guildId ?? '';
         const embed = await buildWorldEventsEmbed(guildId);
@@ -735,14 +758,20 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         if (char.currentHp <= 0) { await i.editReply({ embeds: [errorEmbed('Sem HP', 'Cure-se antes de atacar o boss!')] }); break; }
         if (char.currentEnergy < 10) { await i.editReply({ embeds: [errorEmbed('Sem Energia', 'Precisa de 10⚡ para atacar!')] }); break; }
         const { damageWorldBoss, buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
+        const { isBotOwner: isBotOwnerBoss } = await import('../../utils/allowlist');
         const guildId = i.guildId ?? '';
+        const activeCheck = await getActiveWorldEvent(guildId);
+        if (!activeCheck || activeCheck.eventType !== 'world_boss') {
+          await i.editReply({ embeds: [errorEmbed('Sem Boss', 'Não há um Boss Apocalíptico ativo no momento!')] });
+          break;
+        }
         const stats = computeStats(char);
         const dmg = Math.max(10, Math.floor(stats.attack * (0.5 + Math.random() * 0.5)));
         await prisma.rpgCharacter.update({ where: { discordId }, data: { currentEnergy: Math.max(0, char.currentEnergy - 15) } });
         const result = await damageWorldBoss(guildId, discordId, dmg);
         const active = await getActiveWorldEvent(guildId);
         const embed = await buildWorldEventsEmbed(guildId);
-        const btns = buildWorldEventsButtons(guildId, true, !!active);
+        const btns = buildWorldEventsButtons(guildId, isBotOwnerBoss(discordId), !!active, active?.eventType);
         const fb = result.killed
           ? (await import('../../utils/embeds')).successEmbed('💀 Boss Derrotado!', result.message)
           : (await import('../../utils/embeds')).infoEmbed('⚔️ Ataque', result.message);

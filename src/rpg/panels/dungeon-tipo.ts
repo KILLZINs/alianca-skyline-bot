@@ -70,7 +70,7 @@ export function buildDungeonTypeSelect(char: FullCharacter): ActionRowBuilder<St
 
 export function buildDungeonTypeButtons(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon Normal').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(ButtonStyle.Secondary),
   );
 }
@@ -82,6 +82,7 @@ export async function doBattleWithType(
   dungeonTypeId: string,
   useRandom: boolean = true,
   enemyId?: string,
+  guildId?: string,
 ): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const dungeonType = getDungeonType(dungeonTypeId);
   const loc = getLocation(char.currentLocation);
@@ -164,19 +165,29 @@ export async function doBattleWithType(
 
   // Resultado
   const won = playerHp > 0 && enemyHp <= 0;
-  const energyCost = 12;
+  // Bênção dos Antigos: energia não consumida durante o evento
+  const { getEventMultipliers: getEMTipo } = await import('../panels/world-events');
+  const blessingTipo = guildId ? await getEMTipo(guildId) : { noEnergy: false };
+  const energyCost = blessingTipo.noEnergy ? 0 : 12;
+  if (blessingTipo.noEnergy) log.push('✨ **Bênção dos Antigos**: energia não consumida!');
   playerEnergy = Math.max(0, playerEnergy - energyCost);
 
   let xpGained = 0, goldGained = 0;
   const itemsDropped: string[] = [];
 
   if (won) {
-    xpGained  = Math.round(enemy.xpReward  * dungeonType.xpMult   * (1 + phaseInfo.xpBonus));
-    goldGained = Math.round((Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin) * dungeonType.goldMult * (1 + phaseInfo.goldBonus));
+    // Aplicar multiplicadores de eventos de mundo
+    const { getEventMultipliers } = await import('../panels/world-events');
+    const worldMults = guildId ? await getEventMultipliers(guildId) : { xp: 1, gold: 1, dropBonus: 0, noEnergy: false, enemyMult: 1 };
+    xpGained  = Math.round(enemy.xpReward  * dungeonType.xpMult   * (1 + phaseInfo.xpBonus) * worldMults.xp);
+    goldGained = Math.round((Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin) * dungeonType.goldMult * (1 + phaseInfo.goldBonus) * worldMults.gold);
 
-    // Drop de itens
+    if (worldMults.xp > 1) log.push(`⭐ Bônus de evento: **×${worldMults.xp} XP**!`);
+    if (worldMults.gold > 1) log.push(`💰 Bônus de evento: **×${worldMults.gold} Ouro**!`);
+
+    // Drop de itens (com bônus de meteor)
     for (const drop of (enemy.dropTable ?? [])) {
-      if (Math.random() * 100 < (drop.chance * (1 + dungeonType.dropRarityBonus))) {
+      if (Math.random() * 100 < (drop.chance * (1 + dungeonType.dropRarityBonus) + worldMults.dropBonus * 100)) {
         itemsDropped.push(drop.itemId);
         await giveItem(char.discordId, drop.itemId, 1).catch(() => null);
       }

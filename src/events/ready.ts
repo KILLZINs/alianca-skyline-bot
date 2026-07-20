@@ -174,6 +174,42 @@ export default {
       }
     });
 
+    // ─── Cron: Eventos de mundo aleatórios (a cada 3-6h, horários ímpares) ─────
+    // Tenta iniciar um evento aleatório às 1h, 7h, 13h, 19h (±aleatorio)
+    cron.schedule('0 1,7,13,19 * * *', async () => {
+      // Só dispara com 40% de chance para variar o horário
+      if (Math.random() > 0.4) return;
+      try {
+        const { startRandomWorldEvent } = await import('./rpg/panels/world-events');
+        let started = 0;
+        for (const [, guild] of client.guilds.cache) {
+          const result = await startRandomWorldEvent(guild.id).catch(() => ({ success: false }));
+          if (result.success && (result as any).name) {
+            started++;
+            // Tenta anunciar o evento no canal de anúncios configurado
+            const { prisma: db } = await import('./database/client');
+            const config = await db.guildConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
+            const channelId = config?.announcementChannelId ?? config?.welcomeChannelId;
+            if (channelId) {
+              const { TextChannel, EmbedBuilder: EB } = await import('discord.js');
+              const ch = guild.channels.cache.get(channelId);
+              if (ch && ch.isTextBased()) {
+                const em = new EB()
+                  .setColor(0xFFD700)
+                  .setTitle(`🌎 Evento de Mundo Iniciado!`)
+                  .setDescription(`Um evento especial começou: **${(result as any).name}**\n\nAbra seu perfil RPG e vá em 🌎 Eventos para participar!`)
+                  .setTimestamp();
+                await (ch as any).send({ embeds: [em] }).catch(() => null);
+              }
+            }
+          }
+        }
+        if (started > 0) console.log(`[Cron] Eventos aleatórios iniciados em ${started} servidor(es).`);
+      } catch (err) {
+        console.error('[Cron] Erro no scheduler de eventos:', err);
+      }
+    });
+
     console.log(`📋 ${client.guilds.cache.size} servidor(es) | 👥 ${client.users.cache.size} usuário(s)`);
   },
 };

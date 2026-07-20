@@ -101,7 +101,7 @@ export function buildDungeonButtons(char: FullCharacter): ActionRowBuilder<Butto
   );
 }
 
-export async function doBattleRandom(char: FullCharacter): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
+export async function doBattleRandom(char: FullCharacter, guildId?: string): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const loc = getLocation(char.currentLocation);
   const enemies = getEnemiesForLocation(loc.id, char.level);
   if (enemies.length === 0) {
@@ -112,11 +112,11 @@ export async function doBattleRandom(char: FullCharacter): Promise<{ embed: Embe
   }
 
   const enemy = enemies[Math.floor(Math.random() * enemies.length)];
-  const result = await runCombat(char, enemy);
+  const result = await runCombat(char, enemy, false, guildId);
   return buildCombatResultEmbed(result, char);
 }
 
-export async function doBattleEnemy(char: FullCharacter, enemyId: string): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
+export async function doBattleEnemy(char: FullCharacter, enemyId: string, guildId?: string): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const enemy = getEnemy(enemyId);
   if (!enemy) {
     return {

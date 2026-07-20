@@ -42,6 +42,7 @@ export async function runCombat(
   char: FullCharacter,
   enemy: Enemy,
   useSkill: boolean = false,
+  guildId?: string,
 ): Promise<CombatResult> {
   const stats = computeStats(char);
   const scaledEnemy = scaleEnemy(enemy, char.level);
@@ -119,16 +120,21 @@ export async function runCombat(
     result = 'vitoria';
     state.log.push(`\n🏆 **VITÓRIA!** ${enemy.name} foi derrotado!`);
 
-    // calcular recompensas
-    const goldBonus = 1 + (stats.goldBonus / 100);
-    const xpBonus   = 1 + ((stats.xpBonus) / 100);
+    // calcular recompensas (com multiplicadores de eventos de mundo)
+    const { getEventMultipliers } = await import('../panels/world-events');
+    const worldMults = guildId ? await getEventMultipliers(guildId) : { xp: 1, gold: 1, dropBonus: 0, noEnergy: false, enemyMult: 1 };
+    const goldBonus = (1 + (stats.goldBonus / 100)) * worldMults.gold;
+    const xpBonus   = (1 + ((stats.xpBonus) / 100)) * worldMults.xp;
     xpGained   = Math.floor(scaledEnemy.xpReward * xpBonus);
     goldGained = Math.floor((scaledEnemy.goldMin + Math.random() * (scaledEnemy.goldMax - scaledEnemy.goldMin)) * goldBonus);
 
-    // drop de itens
+    if (worldMults.xp > 1) state.log.push(`⭐ Bônus de evento: **×${worldMults.xp} XP**!`);
+    if (worldMults.gold > 1) state.log.push(`💰 Bônus de evento: **×${worldMults.gold} Ouro**!`);
+
+    // drop de itens (com bônus de meteor)
     for (const drop of enemy.dropTable) {
       const roll = Math.random() * 100;
-      if (roll < drop.chance) {
+      if (roll < drop.chance + (worldMults.dropBonus * 100)) {
         itemsDropped.push(drop.itemId);
       }
     }
@@ -149,7 +155,11 @@ export async function runCombat(
   // ── Salvar no banco ────────────────────────────────────────────────────────
   const newHp = result === 'derrota' ? Math.floor(stats.maxHp * 0.1) : state.playerHp;
   // Custo de energia por combate — base maior + crescimento mais rápido por rodada
-  const energyCost = Math.min(state.playerEnergy, 25 + state.round * 3);
+  // blessing event: energia não é consumida
+  const { getEventMultipliers: getMults } = await import('../panels/world-events');
+  const blessingCheck = guildId ? await getMults(guildId) : { noEnergy: false };
+  const energyCost = blessingCheck.noEnergy ? 0 : Math.min(state.playerEnergy, 25 + state.round * 3);
+  if (blessingCheck.noEnergy) state.log.push('✨ **Bênção dos Antigos**: energia não consumida!');
   const finalEnergy = Math.max(0, state.playerEnergy - energyCost);
 
   await prisma.rpgCharacter.update({
