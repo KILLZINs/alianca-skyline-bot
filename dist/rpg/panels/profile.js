@@ -171,23 +171,24 @@ function buildProfileEmbed(char, stats) {
 }
 // ─── Botões do perfil ──────────────────────────────────────────────────────────
 function buildProfileButtons(char) {
-    // Linha 1: ações principais (combate e exploração)
-    const row1 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('rpg:viajar').setLabel('🗺️ Viajar').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary));
-    // Linha 2: gerenciamento e acesso rápido
-    const row2 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:habilidades').setLabel('✨ Habilidades').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:stats').setLabel('📊 Estatísticas').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder()
+    // ── Linha 1: Aventura — ações principais de combate e mundo ──────────────────
+    const row1 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('rpg:viajar').setLabel('🗺️ Viajar').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('rpg:exploracao').setLabel('🌍 Explorar').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary));
+    // ── Linha 2: Personagem — gerenciamento do personagem ────────────────────────
+    const pontosLabel = char.statPoints > 0 ? `⭐ Pontos (${char.statPoints}) ←` : '⭐ Pontos';
+    const row2 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:habilidades').setLabel('✨ Habilidades').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder()
         .setCustomId('rpg:pontos')
-        .setLabel(char.statPoints > 0 ? `⭐ Pontos (${char.statPoints}) ←` : '⭐ Pontos')
+        .setLabel(pontosLabel)
         .setStyle(char.statPoints > 0 ? discord_js_1.ButtonStyle.Danger : discord_js_1.ButtonStyle.Secondary)
-        .setDisabled(char.statPoints === 0));
-    // Linha 3: novos sistemas (meditação, treino, taverna, pesca, exploração)
+        .setDisabled(char.statPoints === 0), new discord_js_1.ButtonBuilder().setCustomId('rpg:stats').setLabel('📊 Estatísticas').setStyle(discord_js_1.ButtonStyle.Secondary));
+    // ── Linha 3: Missões — quests e progressão de classe ─────────────────────────
+    const row3 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(discord_js_1.ButtonStyle.Primary));
+    // ── Linha 4: Atividades — treinamento e lazer ─────────────────────────────────
     const isMeditating = !!char.meditatingUntil && new Date(char.meditatingUntil) > new Date();
     const meditaReady = !!char.meditatingUntil && new Date(char.meditatingUntil) <= new Date();
-    const row3 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+    const row4 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
         .setCustomId('rpg:meditar')
-        .setLabel(meditaReady ? '🪷 Coletar' : isMeditating ? '🧘 Meditando...' : '🧘 Meditar')
-        .setStyle(meditaReady ? discord_js_1.ButtonStyle.Success : discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:treinar').setLabel('🥊 Treinar').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:taverna').setLabel('🍺 Taverna').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:pescaria').setLabel('🎣 Pescar').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:exploracao').setLabel('🌍 Explorar').setStyle(discord_js_1.ButtonStyle.Success));
-    // Linha 4: missões de classe e eventos de mundo
-    const row4 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon_tipo').setLabel('⚔️ Dungeon+').setStyle(discord_js_1.ButtonStyle.Danger));
+        .setLabel(meditaReady ? '🪷 Coletar Meditação' : isMeditating ? '🧘 Meditando...' : '🧘 Meditar')
+        .setStyle(meditaReady ? discord_js_1.ButtonStyle.Success : discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:treinar').setLabel('🥊 Treinar').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:taverna').setLabel('🍺 Taverna').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:pescaria').setLabel('🎣 Pescar').setStyle(discord_js_1.ButtonStyle.Secondary));
     return [row1, row2, row3, row4];
 }
 // ─── Embed da cidade (hub central) ────────────────────────────────────────────

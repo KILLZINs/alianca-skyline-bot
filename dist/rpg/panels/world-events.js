@@ -7,6 +7,7 @@ exports.getActiveWorldEvent = getActiveWorldEvent;
 exports.startWorldEvent = startWorldEvent;
 exports.getEventMultipliers = getEventMultipliers;
 exports.damageWorldBoss = damageWorldBoss;
+exports.startRandomWorldEvent = startRandomWorldEvent;
 exports.buildWorldEventsEmbed = buildWorldEventsEmbed;
 exports.buildWorldEventsButtons = buildWorldEventsButtons;
 exports.buildEventStartSelect = buildEventStartSelect;
@@ -128,6 +129,15 @@ async function damageWorldBoss(guildId, discordId, damage) {
         killed,
     };
 }
+// ─── Evento aleatório (para o scheduler) ─────────────────────────────────────
+async function startRandomWorldEvent(guildId) {
+    const existing = await getActiveWorldEvent(guildId);
+    if (existing)
+        return { success: false };
+    const tpl = EVENT_TEMPLATES[Math.floor(Math.random() * EVENT_TEMPLATES.length)];
+    const result = await startWorldEvent(guildId, tpl.id);
+    return { success: result.success, name: tpl.name };
+}
 // ─── Painel ───────────────────────────────────────────────────────────────────
 async function buildWorldEventsEmbed(guildId) {
     const active = await getActiveWorldEvent(guildId);
@@ -154,15 +164,22 @@ async function buildWorldEventsEmbed(guildId) {
         .setTitle('🌎 Eventos de Mundo')
         .setDescription('Nenhum evento ativo no momento.\n\nEventos mundiais afetam **todos os membros** da guilda e trazem bônus épicos!\n\n' +
         EVENT_TEMPLATES.map(t => `${t.emoji} **${t.name}** — ${t.effect}`).join('\n'))
-        .setFooter({ text: '🌎 Administradores podem iniciar eventos com o botão abaixo' });
+        .setFooter({ text: '🌎 Donos do bot podem iniciar eventos com o botão abaixo' });
 }
-function buildWorldEventsButtons(guildId, isAdmin, hasActiveEvent) {
+function buildWorldEventsButtons(guildId, isOwner, hasActiveEvent, activeEventType) {
     const rows = [];
+    const isWorldBoss = activeEventType === 'world_boss';
     if (hasActiveEvent) {
-        rows.push(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:evento_atacar_boss').setLabel('⚔️ Atacar Boss!').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(discord_js_1.ButtonStyle.Secondary)));
+        const btns = [];
+        if (isWorldBoss) {
+            btns.push(new discord_js_1.ButtonBuilder().setCustomId('rpg:evento_atacar_boss').setLabel('⚔️ Atacar Boss!').setStyle(discord_js_1.ButtonStyle.Danger));
+        }
+        btns.push(new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary));
+        btns.push(new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(discord_js_1.ButtonStyle.Secondary));
+        rows.push(new discord_js_1.ActionRowBuilder().addComponents(...btns));
     }
     else {
-        rows.push(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(discord_js_1.ButtonStyle.Secondary), ...(isAdmin ? [new discord_js_1.ButtonBuilder().setCustomId('rpg:evento_iniciar').setLabel('⚡ Iniciar Evento').setStyle(discord_js_1.ButtonStyle.Primary)] : [])));
+        rows.push(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:eventos').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Voltar').setStyle(discord_js_1.ButtonStyle.Secondary), ...(isOwner ? [new discord_js_1.ButtonBuilder().setCustomId('rpg:evento_iniciar').setLabel('⚡ Iniciar Evento').setStyle(discord_js_1.ButtonStyle.Primary)] : [])));
     }
     return rows;
 }

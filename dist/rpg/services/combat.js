@@ -2,6 +2,39 @@
 // ═══════════════════════════════════════════════════════════════════════
 // ENGINE DE COMBATE RPG
 // ═══════════════════════════════════════════════════════════════════════
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runCombat = runCombat;
 exports.runPvp = runPvp;
@@ -14,7 +47,7 @@ const enemies_1 = require("../constants/enemies");
 const items_1 = require("../constants/items");
 const skills_1 = require("../constants/skills");
 // ─── Combate principal ─────────────────────────────────────────────────────
-async function runCombat(char, enemy, useSkill = false) {
+async function runCombat(char, enemy, useSkill = false, guildId) {
     const stats = (0, character_1.computeStats)(char);
     const scaledEnemy = (0, enemies_1.scaleEnemy)(enemy, char.level);
     const state = {
@@ -83,15 +116,21 @@ async function runCombat(char, enemy, useSkill = false) {
     else if (state.enemyHp <= 0) {
         result = 'vitoria';
         state.log.push(`\n🏆 **VITÓRIA!** ${enemy.name} foi derrotado!`);
-        // calcular recompensas
-        const goldBonus = 1 + (stats.goldBonus / 100);
-        const xpBonus = 1 + ((stats.xpBonus) / 100);
+        // calcular recompensas (com multiplicadores de eventos de mundo)
+        const { getEventMultipliers } = await Promise.resolve().then(() => __importStar(require('../panels/world-events')));
+        const worldMults = guildId ? await getEventMultipliers(guildId) : { xp: 1, gold: 1, dropBonus: 0, noEnergy: false, enemyMult: 1 };
+        const goldBonus = (1 + (stats.goldBonus / 100)) * worldMults.gold;
+        const xpBonus = (1 + ((stats.xpBonus) / 100)) * worldMults.xp;
         xpGained = Math.floor(scaledEnemy.xpReward * xpBonus);
         goldGained = Math.floor((scaledEnemy.goldMin + Math.random() * (scaledEnemy.goldMax - scaledEnemy.goldMin)) * goldBonus);
-        // drop de itens
+        if (worldMults.xp > 1)
+            state.log.push(`⭐ Bônus de evento: **×${worldMults.xp} XP**!`);
+        if (worldMults.gold > 1)
+            state.log.push(`💰 Bônus de evento: **×${worldMults.gold} Ouro**!`);
+        // drop de itens (com bônus de meteor)
         for (const drop of enemy.dropTable) {
             const roll = Math.random() * 100;
-            if (roll < drop.chance) {
+            if (roll < drop.chance + (worldMults.dropBonus * 100)) {
                 itemsDropped.push(drop.itemId);
             }
         }
@@ -111,7 +150,12 @@ async function runCombat(char, enemy, useSkill = false) {
     // ── Salvar no banco ────────────────────────────────────────────────────────
     const newHp = result === 'derrota' ? Math.floor(stats.maxHp * 0.1) : state.playerHp;
     // Custo de energia por combate — base maior + crescimento mais rápido por rodada
-    const energyCost = Math.min(state.playerEnergy, 25 + state.round * 3);
+    // blessing event: energia não é consumida
+    const { getEventMultipliers: getMults } = await Promise.resolve().then(() => __importStar(require('../panels/world-events')));
+    const blessingCheck = guildId ? await getMults(guildId) : { noEnergy: false };
+    const energyCost = blessingCheck.noEnergy ? 0 : Math.min(state.playerEnergy, 25 + state.round * 3);
+    if (blessingCheck.noEnergy)
+        state.log.push('✨ **Bênção dos Antigos**: energia não consumida!');
     const finalEnergy = Math.max(0, state.playerEnergy - energyCost);
     await client_1.prisma.rpgCharacter.update({
         where: { discordId: char.discordId },

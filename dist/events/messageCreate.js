@@ -117,6 +117,14 @@ exports.default = {
         // ─── Mission progress (only if featMissions enabled) ─────────────────────
         const dateStr = today();
         const weekStr = thisWeek();
+        if (config.featMissions) {
+            // Garante que as missões do dia existem antes de tentar atualizar
+            const { ensureDailyMissions, ensureWeeklyMissions } = await Promise.resolve().then(() => __importStar(require('../commands/utility/missoes')));
+            await Promise.all([
+                ensureDailyMissions(authorId, guildId),
+                ensureWeeklyMissions(authorId, guildId),
+            ]).catch(() => null);
+        }
         if (config.featMissions)
             await Promise.all([
                 // Diárias

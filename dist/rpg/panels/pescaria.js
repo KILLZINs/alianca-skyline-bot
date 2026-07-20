@@ -23,10 +23,9 @@ async function buildPescariaEmbed(char) {
     const isReady = session && session.reelableAt <= new Date();
     let status;
     if (isWaiting) {
-        const rem = Math.ceil((session.reelableAt.getTime() - Date.now()) / 1000);
-        const mins = Math.floor(rem / 60);
-        const secs = rem % 60;
-        status = `🎣 **Aguardando...** isca na água!\n⏳ Puxe em **${mins}m ${secs}s**!`;
+        // <t:UNIX:R> atualiza em tempo real no Discord (ex: "daqui 1 minuto")
+        const ts = Math.floor(session.reelableAt.getTime() / 1000);
+        status = `🎣 **Aguardando...** isca na água!\n⏳ Pronto para puxar <t:${ts}:R>`;
     }
     else if (isReady) {
         status = `🐟 **Algo puxou a isca!** Clique em 🪝 Puxar para recolher!`;

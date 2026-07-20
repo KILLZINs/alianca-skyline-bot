@@ -44,8 +44,8 @@ function buildDungeonEmbed(char) {
     if (hpPct < 0.3) {
         embed.addFields({ name: '⚠️ HP CRÍTICO — Cuidado!', value: 'Seu HP está muito baixo. Considere ir à **🏰 Cidade → 🏥 Curar HP** antes de batalhar.', inline: false });
     }
-    embed.addFields({ name: '👹 Inimigos da Região', value: enemyList, inline: false }, { name: '💀 Bosses', value: bossList, inline: false }, { name: '❤️ HP', value: hpDisplay, inline: true }, { name: '⚡ Energia', value: `**${char.currentEnergy}/${stats.maxEnergy}**`, inline: true }, { name: '⏱️ Cooldown', value: cd.onCooldown ? `🔴 ${cd.remaining}` : '🟢 Pronto!', inline: true });
-    return embed.setFooter({ text: 'Selecione o inimigo para batalhar. Bosses dão muito mais recompensa!' });
+    embed.addFields({ name: '👹 Inimigos da Região', value: enemyList, inline: false }, { name: '💀 Bosses', value: bossList, inline: false }, { name: '🔮 Tipos de Dungeon', value: '> Use o **2º menu** abaixo para escolher um tipo especial com bônus de XP/Ouro (Fogo, Gelo, Sombra, Trovão, Abissal)', inline: false }, { name: '❤️ HP', value: hpDisplay, inline: true }, { name: '⚡ Energia', value: `**${char.currentEnergy}/${stats.maxEnergy}**`, inline: true }, { name: '⏱️ Cooldown', value: cd.onCooldown ? `🔴 ${cd.remaining}` : '🟢 Pronto!', inline: true });
+    return embed.setFooter({ text: '⚔️ Selecione um inimigo normal OU escolha um Tipo de Dungeon para bônus especiais de XP/Ouro!' });
 }
 function buildDungeonSelect(char) {
     const loc = (0, locations_1.getLocation)(char.currentLocation);
@@ -73,7 +73,7 @@ function buildDungeonButtons(char) {
     const cd = (0, combat_1.isDungeonOnCooldown)(char, 5);
     return new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon_aleatorio').setLabel('⚡ Batalha Rápida').setStyle(discord_js_1.ButtonStyle.Danger).setDisabled(!hasEnemies || cd.onCooldown || char.currentHp <= 0), new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon_boss').setLabel('💀 Boss').setStyle(discord_js_1.ButtonStyle.Danger).setDisabled(bosses.length === 0 || cd.onCooldown || char.currentHp <= 0), new discord_js_1.ButtonBuilder().setCustomId('rpg:dungeon').setLabel('🔄 Atualizar').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('◀ Perfil').setStyle(discord_js_1.ButtonStyle.Secondary));
 }
-async function doBattleRandom(char) {
+async function doBattleRandom(char, guildId) {
     const loc = (0, locations_1.getLocation)(char.currentLocation);
     const enemies = (0, enemies_1.getEnemiesForLocation)(loc.id, char.level);
     if (enemies.length === 0) {
@@ -83,10 +83,10 @@ async function doBattleRandom(char) {
         };
     }
     const enemy = enemies[Math.floor(Math.random() * enemies.length)];
-    const result = await (0, combat_2.runCombat)(char, enemy);
+    const result = await (0, combat_2.runCombat)(char, enemy, false, guildId);
     return buildCombatResultEmbed(result, char);
 }
-async function doBattleEnemy(char, enemyId) {
+async function doBattleEnemy(char, enemyId, guildId) {
     const enemy = (0, enemies_1.getEnemy)(enemyId);
     if (!enemy) {
         return {

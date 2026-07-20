@@ -121,7 +121,7 @@ async function handleRpgSelect(i, action) {
                     await i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Sem Energia ⚡', `Você tem apenas **${char.currentEnergy}** de energia — mínimo para batalhar é **10**.\nVá à 🏰 Cidade → 🏥 Curar para restaurar energia.`)], components: [] });
                     return;
                 }
-                const { embed, rows } = await (0, dungeon_1.doBattleEnemy)(char, i.values[0]);
+                const { embed, rows } = await (0, dungeon_1.doBattleEnemy)(char, i.values[0], i.guildId ?? '');
                 await i.editReply({ embeds: [embed], components: rows });
                 break;
             }
@@ -351,7 +351,7 @@ async function handleRpgSelect(i, action) {
                     break;
                 }
                 const { doBattleWithType, buildDungeonTypeEmbed, buildDungeonTypeSelect, buildDungeonTypeButtons } = await Promise.resolve().then(() => __importStar(require('../panels/dungeon-tipo')));
-                const { embed, rows } = await doBattleWithType(char, i.values[0], true);
+                const { embed, rows } = await doBattleWithType(char, i.values[0], true, undefined, i.guildId ?? '');
                 await i.editReply({ embeds: [embed], components: rows });
                 break;
             }
@@ -374,9 +374,9 @@ async function handleRpgSelect(i, action) {
             // ── 🌎 Evento mundial: iniciar ────────────────────────────────────────
             case 'evento_tipo': {
                 await i.deferUpdate();
-                const isAdmin = !!(i.memberPermissions?.has('Administrator'));
-                if (!isAdmin) {
-                    await i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Acesso Negado', 'Apenas administradores podem iniciar eventos.')] });
+                const { isBotOwner } = await Promise.resolve().then(() => __importStar(require('../../utils/allowlist')));
+                if (!isBotOwner(i.user.id)) {
+                    await i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Acesso Negado', 'Apenas donos do bot podem iniciar eventos de mundo.')] });
                     break;
                 }
                 const guildId = i.guildId ?? '';
@@ -384,7 +384,7 @@ async function handleRpgSelect(i, action) {
                 const result = await startWorldEvent(guildId, i.values[0]);
                 const active = await getActiveWorldEvent(guildId);
                 const embed = await buildWorldEventsEmbed(guildId);
-                const btns = buildWorldEventsButtons(guildId, true, !!active);
+                const btns = buildWorldEventsButtons(guildId, true, !!active, active?.eventType);
                 const fb = result.success
                     ? (await Promise.resolve().then(() => __importStar(require('../../utils/embeds')))).successEmbed('🌎 Evento!', result.message)
                     : (await Promise.resolve().then(() => __importStar(require('../../utils/embeds')))).errorEmbed('Evento', result.message);
