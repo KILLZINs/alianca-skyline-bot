@@ -399,7 +399,7 @@ async function adminButtons(i: ButtonInteraction, action: string) {
   }
 
   if (action === 'modulos') {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkAdmin(i))) return;
     await i.deferReply({ ephemeral: true });
     const cfg = await getConfig(guild.id);
     const embed = buildModulosEmbed(cfg as Record<string, unknown>, guild.name);
@@ -408,9 +408,9 @@ async function adminButtons(i: ButtonInteraction, action: string) {
   }
 
   if (action === 'toggle_feat') {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkAdmin(i))) return;
     await i.deferUpdate();
-    const feat = extra[0] as FeatureKey;
+    const feat = i.customId.split(':')[2] as FeatureKey;
     if (!feat || !FEATURE_KEYS.includes(feat)) return;
     const cfg = await getConfig(guild.id);
     const current = ((cfg as Record<string, unknown>)[feat] as boolean) ?? true;
@@ -425,7 +425,7 @@ async function adminButtons(i: ButtonInteraction, action: string) {
   }
 
   if (action === 'mod') {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkAdmin(i))) return;
     await i.deferReply({ ephemeral: true });
     const embed = baseEmbed(COLORS.DARK)
       .setTitle('🔨 Moderação Rápida')
