@@ -217,7 +217,28 @@ export function buildProfileButtons(char: FullCharacter): ActionRowBuilder<Butto
       .setDisabled(char.statPoints === 0),
   );
 
-  return [row1, row2];
+  // Linha 3: novos sistemas (meditação, treino, taverna, pesca, exploração)
+  const isMeditating = !!(char as any).meditatingUntil && new Date((char as any).meditatingUntil) > new Date();
+  const meditaReady  = !!(char as any).meditatingUntil && new Date((char as any).meditatingUntil) <= new Date();
+  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('rpg:meditar')
+      .setLabel(meditaReady ? '🪷 Coletar' : isMeditating ? '🧘 Meditando...' : '🧘 Meditar')
+      .setStyle(meditaReady ? ButtonStyle.Success : ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:treinar').setLabel('🥊 Treinar').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:taverna').setLabel('🍺 Taverna').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:pescaria').setLabel('🎣 Pescar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:exploracao').setLabel('🌍 Explorar').setStyle(ButtonStyle.Success),
+  );
+
+  // Linha 4: missões de classe e eventos de mundo
+  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('rpg:dungeon_tipo').setLabel('⚔️ Dungeon+').setStyle(ButtonStyle.Danger),
+  );
+
+  return [row1, row2, row3, row4];
 }
 
 // ─── Embed da cidade (hub central) ────────────────────────────────────────────

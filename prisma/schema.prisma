@@ -368,6 +368,11 @@ model RpgCharacter {
   lastPvp        DateTime?
   lastRest       DateTime?
   lastEnergyTick DateTime?
+  lastFishing    DateTime?
+  lastTrain      DateTime?
+  lastExplore    DateTime?
+  lastTavern     DateTime?
+  meditatingUntil DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -377,6 +382,9 @@ model RpgCharacter {
   learnedSkills   RpgLearnedSkill[]
   combatLogs      RpgCombatLog[]
   craftQueue      RpgCraftQueue[]
+  tempBuffs       RpgTempBuff[]
+  classMissions   RpgClassMission[]
+  fishingSession  RpgFishingSession?
 
   @@map("rpg_characters")
 }
@@ -494,6 +502,66 @@ model RpgShopRotation {
   createdAt DateTime @default(now())
 
   @@map("rpg_shop_rotation")
+}
+
+// ─── Novos sistemas RPG ───────────────────────────────────────────────
+
+model RpgTempBuff {
+  id        String   @id @default(cuid())
+  discordId String
+  buffType  String
+  value     Float
+  expiresAt DateTime
+  source    String
+  label     String   @default("")
+  character RpgCharacter @relation(fields: [discordId], references: [discordId], onDelete: Cascade)
+
+  @@map("rpg_temp_buffs")
+}
+
+model RpgWorldEvent {
+  id            String   @id @default(cuid())
+  guildId       String
+  eventType     String
+  name          String
+  description   String
+  emoji         String   @default("🌍")
+  startsAt      DateTime
+  endsAt        DateTime
+  bossCurrentHp Int?
+  bossMaxHp     Int?
+  participants  Json     @default("[]")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@map("rpg_world_events")
+}
+
+model RpgClassMission {
+  id           String   @id @default(cuid())
+  discordId    String
+  dateStr      String
+  missionKey   String
+  progress     Int      @default(0)
+  target       Int
+  completed    Boolean  @default(false)
+  claimed      Boolean  @default(false)
+  xpReward     Int      @default(100)
+  goldReward   Int      @default(50)
+  energyReward Int      @default(10)
+  character    RpgCharacter @relation(fields: [discordId], references: [discordId], onDelete: Cascade)
+
+  @@unique([discordId, dateStr, missionKey])
+  @@map("rpg_class_missions")
+}
+
+model RpgFishingSession {
+  discordId  String   @id
+  castAt     DateTime
+  reelableAt DateTime
+  character  RpgCharacter @relation(fields: [discordId], references: [discordId], onDelete: Cascade)
+
+  @@map("rpg_fishing_sessions")
 }
 
 // ─── NOVO: Boss Mundial ───────────────────────────────────────────────

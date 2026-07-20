@@ -555,6 +555,222 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         break;
       }
 
+      // ── 🧘 Meditar ───────────────────────────────────────────────────────
+      case 'meditar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildMeditarEmbed, buildMeditarButtons } = await import('../panels/meditar');
+        await i.editReply({ embeds: [buildMeditarEmbed(char)], components: buildMeditarButtons(char) });
+        break;
+      }
+
+      case 'meditar_rapida':
+      case 'meditar_media':
+      case 'meditar_profunda': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { startMeditation, buildMeditarEmbed, buildMeditarButtons } = await import('../panels/meditar');
+        const optId = baseAction.replace('meditar_', '');
+        const result = await startMeditation(char, optId);
+        const updatedChar = await getOrCreateCharacter(discordId, username);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Meditação', result.message)], components: buildMeditarButtons(char) });
+        } else {
+          await i.editReply({ embeds: [buildMeditarEmbed(updatedChar)], components: buildMeditarButtons(updatedChar) });
+        }
+        break;
+      }
+
+      case 'meditar_coletar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { collectMeditation, buildMeditarEmbed, buildMeditarButtons } = await import('../panels/meditar');
+        const result = await collectMeditation(char);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Meditação', result.message)] });
+        } else {
+          const updatedChar = await getOrCreateCharacter(discordId, username);
+          const parts = [`❤️ +${result.hpGained} HP`, `⚡ +${result.energyGained} Energia`];
+          if (result.buffGiven) parts.push('✨ +15% XP (1h)');
+          const resultEmbed = new (await import('discord.js')).EmbedBuilder()
+            .setColor(0x9B59B6).setTitle('🧘 Meditação Concluída!')
+            .setDescription(parts.join(' | '));
+          await i.editReply({ embeds: [resultEmbed, buildMeditarEmbed(updatedChar)], components: buildMeditarButtons(updatedChar) });
+        }
+        break;
+      }
+
+      // ── 🥊 Treinar ────────────────────────────────────────────────────────
+      case 'treinar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildTreinarEmbed, buildTreinarSelect, buildTreinarButtons } = await import('../panels/treinar');
+        const lastTrain = char.lastTrain;
+        const onCd = lastTrain && (Date.now() - lastTrain.getTime()) < 20 * 60 * 1000;
+        const embed = await buildTreinarEmbed(char);
+        await i.editReply({ embeds: [embed], components: [buildTreinarSelect(!!onCd), buildTreinarButtons()] });
+        break;
+      }
+
+      // ── 🍺 Taverna ────────────────────────────────────────────────────────
+      case 'taverna': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildTavernaEmbed, buildTavernaMenuSelect, buildTavernaButtons } = await import('../panels/taverna');
+        await i.editReply({ embeds: [await buildTavernaEmbed(char)], components: [buildTavernaMenuSelect(), buildTavernaButtons()] });
+        break;
+      }
+
+      case 'taverna_dados': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { rollTavernaDice, buildTavernaButtons } = await import('../panels/taverna');
+        const { embed } = await rollTavernaDice(char);
+        await i.editReply({ embeds: [embed], components: [buildTavernaButtons()] });
+        break;
+      }
+
+      // ── 🎣 Pescaria ───────────────────────────────────────────────────────
+      case 'pescaria': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildPescariaEmbed, buildPescariaButtons } = await import('../panels/pescaria');
+        const { prisma: db } = await import('../../database/client');
+        const session = await db.rpgFishingSession.findUnique({ where: { discordId } });
+        const isReady = !!(session && session.reelableAt <= new Date());
+        await i.editReply({
+          embeds: [await buildPescariaEmbed(char)],
+          components: buildPescariaButtons(char, !!session, isReady),
+        });
+        break;
+      }
+
+      case 'pesca_lancar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { castFishingLine, buildPescariaEmbed, buildPescariaButtons } = await import('../panels/pescaria');
+        const result = await castFishingLine(char);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Pesca', result.message)] });
+        } else {
+          const updatedChar = await getOrCreateCharacter(discordId, username);
+          const { prisma: db } = await import('../../database/client');
+          const session = await db.rpgFishingSession.findUnique({ where: { discordId } });
+          await i.editReply({
+            embeds: [await buildPescariaEmbed(updatedChar)],
+            components: buildPescariaButtons(updatedChar, !!session, false),
+          });
+        }
+        break;
+      }
+
+      case 'pesca_puxar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { reelFishingLine, buildPescariaEmbed, buildPescariaButtons } = await import('../panels/pescaria');
+        const result = await reelFishingLine(char);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Pesca', result.message!)] });
+        } else {
+          const updatedChar = await getOrCreateCharacter(discordId, username);
+          await i.editReply({
+            embeds: [result.embed!],
+            components: buildPescariaButtons(updatedChar, false, false),
+          });
+        }
+        break;
+      }
+
+      // ── 🌍 Exploração ─────────────────────────────────────────────────────
+      case 'exploracao': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildExploracaoEmbed, buildExploracaoButtons } = await import('../panels/exploracao');
+        const lastExplore = char.lastExplore;
+        const onCd = !!(lastExplore && (Date.now() - lastExplore.getTime()) < 3 * 60 * 1000);
+        await i.editReply({ embeds: [await buildExploracaoEmbed(char)], components: buildExploracaoButtons(onCd) });
+        break;
+      }
+
+      case 'explorar': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { doExplore, buildExploracaoEmbed, buildExploracaoButtons } = await import('../panels/exploracao');
+        const result = await doExplore(char);
+        if (!result.success) {
+          await i.editReply({ embeds: [errorEmbed('Exploração', result.message!)] });
+        } else {
+          await i.editReply({ embeds: [result.embed!], components: buildExploracaoButtons(true) });
+        }
+        break;
+      }
+
+      // ── 🌎 Eventos de Mundo ───────────────────────────────────────────────
+      case 'eventos': {
+        await i.deferUpdate();
+        const guildId = i.guildId ?? '';
+        const { buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
+        const active = await getActiveWorldEvent(guildId);
+        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
+        const embed = await buildWorldEventsEmbed(guildId);
+        const btns = buildWorldEventsButtons(guildId, isAdmin, !!active);
+        await i.editReply({ embeds: [embed], components: btns });
+        break;
+      }
+
+      case 'evento_iniciar': {
+        await i.deferUpdate();
+        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
+        if (!isAdmin) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas administradores podem iniciar eventos.')] }); break; }
+        const { buildEventStartSelect, buildWorldEventsEmbed } = await import('../panels/world-events');
+        const guildId = i.guildId ?? '';
+        const embed = await buildWorldEventsEmbed(guildId);
+        await i.editReply({ embeds: [embed], components: [buildEventStartSelect()] });
+        break;
+      }
+
+      case 'evento_atacar_boss': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        if (char.currentHp <= 0) { await i.editReply({ embeds: [errorEmbed('Sem HP', 'Cure-se antes de atacar o boss!')] }); break; }
+        if (char.currentEnergy < 10) { await i.editReply({ embeds: [errorEmbed('Sem Energia', 'Precisa de 10⚡ para atacar!')] }); break; }
+        const { damageWorldBoss, buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
+        const guildId = i.guildId ?? '';
+        const stats = computeStats(char);
+        const dmg = Math.max(10, Math.floor(stats.attack * (0.5 + Math.random() * 0.5)));
+        await prisma.rpgCharacter.update({ where: { discordId }, data: { currentEnergy: Math.max(0, char.currentEnergy - 15) } });
+        const result = await damageWorldBoss(guildId, discordId, dmg);
+        const active = await getActiveWorldEvent(guildId);
+        const embed = await buildWorldEventsEmbed(guildId);
+        const btns = buildWorldEventsButtons(guildId, true, !!active);
+        const fb = result.killed
+          ? (await import('../../utils/embeds')).successEmbed('💀 Boss Derrotado!', result.message)
+          : (await import('../../utils/embeds')).infoEmbed('⚔️ Ataque', result.message);
+        await i.editReply({ embeds: [fb, embed], components: btns });
+        break;
+      }
+
+      // ── 📜 Missões de Classe ──────────────────────────────────────────────
+      case 'missoes_classe': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildClassMissionsEmbed, buildClassMissionsClaimSelect, buildClassMissionsButtons } = await import('../panels/class-missions');
+        const embed = await buildClassMissionsEmbed(char);
+        const claimSel = await buildClassMissionsClaimSelect(discordId);
+        const rows: any[] = claimSel ? [claimSel, buildClassMissionsButtons()] : [buildClassMissionsButtons()];
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
+
+      // ── ⚔️ Dungeon por tipo ────────────────────────────────────────────────
+      case 'dungeon_tipo': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buildDungeonTypeEmbed, buildDungeonTypeSelect, buildDungeonTypeButtons } = await import('../panels/dungeon-tipo');
+        await i.editReply({ embeds: [buildDungeonTypeEmbed(char)], components: [buildDungeonTypeSelect(char), buildDungeonTypeButtons()] });
+        break;
+      }
+
       default:
         if (i.deferred || i.replied) {
           await i.editReply({ embeds: [errorEmbed('Ação desconhecida', `Ação RPG \`${baseAction}\` não encontrada.`)] });

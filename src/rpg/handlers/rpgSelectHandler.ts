@@ -303,6 +303,84 @@ export async function handleRpgSelect(i: StringSelectMenuInteraction, action: st
         break;
       }
 
+      // ── 🥊 Treinar: escolher stat ─────────────────────────────────────────
+      case 'treinar_stat': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { doTrain, buildTreinarEmbed, buildTreinarSelect, buildTreinarButtons } = await import('../panels/treinar');
+        const result = await doTrain(char, i.values[0]);
+        const updatedChar = await getOrCreateCharacter(discordId, username);
+        const lastTrain = updatedChar.lastTrain;
+        const onCd = !!(lastTrain && (Date.now() - lastTrain.getTime()) < 20 * 60 * 1000);
+        const embed = await buildTreinarEmbed(updatedChar);
+        const fb = result.success
+          ? (await import('../../utils/embeds')).successEmbed('🥊 Treino!', result.message)
+          : (await import('../../utils/embeds')).errorEmbed('Treino', result.message);
+        await i.editReply({ embeds: [fb, embed], components: [buildTreinarSelect(onCd), buildTreinarButtons()] });
+        break;
+      }
+
+      // ── 🍺 Taverna: pedir item ────────────────────────────────────────────
+      case 'taverna_pedir': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { buyTavernaItem, buildTavernaEmbed, buildTavernaMenuSelect, buildTavernaButtons } = await import('../panels/taverna');
+        const result = await buyTavernaItem(char, i.values[0]);
+        const updatedChar = await getOrCreateCharacter(discordId, username);
+        const fb = result.success
+          ? (await import('../../utils/embeds')).successEmbed('🍺 Taverna!', result.message)
+          : (await import('../../utils/embeds')).errorEmbed('Taverna', result.message);
+        await i.editReply({ embeds: [fb, await buildTavernaEmbed(updatedChar)], components: [buildTavernaMenuSelect(), buildTavernaButtons()] });
+        break;
+      }
+
+      // ── ⚔️ Dungeon tipo: escolher ─────────────────────────────────────────
+      case 'dungeon_tipo_escolher': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        if (char.currentHp <= 0) { await i.editReply({ embeds: [errorEmbed('Sem HP', 'Cure-se antes de entrar na dungeon.')] }); break; }
+        if (char.currentEnergy < 12) { await i.editReply({ embeds: [errorEmbed('Sem Energia ⚡', `Precisa de **12⚡** para entrar nesta dungeon. Você tem **${char.currentEnergy}⚡**.`)] }); break; }
+        const { doBattleWithType, buildDungeonTypeEmbed, buildDungeonTypeSelect, buildDungeonTypeButtons } = await import('../panels/dungeon-tipo');
+        const { embed, rows } = await doBattleWithType(char, i.values[0], true);
+        await i.editReply({ embeds: [embed], components: rows });
+        break;
+      }
+
+      // ── 📜 Missões de classe: coletar ─────────────────────────────────────
+      case 'class_mission_claim': {
+        await i.deferUpdate();
+        const char = await getOrCreateCharacter(discordId, username);
+        const { claimClassMission } = await import('../services/class-missions');
+        const { buildClassMissionsEmbed, buildClassMissionsClaimSelect, buildClassMissionsButtons } = await import('../panels/class-missions');
+        const result = await claimClassMission(discordId, i.values[0]);
+        const embed = await buildClassMissionsEmbed(char);
+        const claimSel = await buildClassMissionsClaimSelect(discordId);
+        const rows: any[] = claimSel ? [claimSel, buildClassMissionsButtons()] : [buildClassMissionsButtons()];
+        const fb = result.success
+          ? (await import('../../utils/embeds')).successEmbed('🎁 Missão!', `${result.message}\n+**${result.xp}** XP | +**${result.gold}** 🪙 | +**${result.energy}** ⚡`)
+          : (await import('../../utils/embeds')).errorEmbed('Missão', result.message);
+        await i.editReply({ embeds: [fb, embed], components: rows });
+        break;
+      }
+
+      // ── 🌎 Evento mundial: iniciar ────────────────────────────────────────
+      case 'evento_tipo': {
+        await i.deferUpdate();
+        const isAdmin = !!(i.memberPermissions?.has('Administrator'));
+        if (!isAdmin) { await i.editReply({ embeds: [errorEmbed('Acesso Negado', 'Apenas administradores podem iniciar eventos.')] }); break; }
+        const guildId = i.guildId ?? '';
+        const { startWorldEvent, buildWorldEventsEmbed, buildWorldEventsButtons, getActiveWorldEvent } = await import('../panels/world-events');
+        const result = await startWorldEvent(guildId, i.values[0]);
+        const active = await getActiveWorldEvent(guildId);
+        const embed = await buildWorldEventsEmbed(guildId);
+        const btns = buildWorldEventsButtons(guildId, true, !!active);
+        const fb = result.success
+          ? (await import('../../utils/embeds')).successEmbed('🌎 Evento!', result.message)
+          : (await import('../../utils/embeds')).errorEmbed('Evento', result.message);
+        await i.editReply({ embeds: [fb, embed], components: btns });
+        break;
+      }
+
       default:
         await i.editReply({ embeds: [errorEmbed('Ação desconhecida', `Select RPG \`${action}\` não encontrado.`)] });
     }
