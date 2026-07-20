@@ -89,6 +89,15 @@ export default {
     const dateStr = today();
     const weekStr = thisWeek();
 
+    if (config.featMissions) {
+      // Garante que as missões do dia existem antes de tentar atualizar
+      const { ensureDailyMissions, ensureWeeklyMissions } = await import('../commands/utility/missoes');
+      await Promise.all([
+        ensureDailyMissions(authorId, guildId),
+        ensureWeeklyMissions(authorId, guildId),
+      ]).catch(() => null);
+    }
+
     if (config.featMissions) await Promise.all([
       // Diárias
       prisma.dailyMission.updateMany({

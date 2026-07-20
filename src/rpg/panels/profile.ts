@@ -235,7 +235,6 @@ export function buildProfileButtons(char: FullCharacter): ActionRowBuilder<Butto
   const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('rpg:dungeon_tipo').setLabel('⚔️ Dungeon+').setStyle(ButtonStyle.Danger),
   );
 
   return [row1, row2, row3, row4];
