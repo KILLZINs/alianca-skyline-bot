@@ -256,13 +256,6 @@ exports.default = {
         const def = ACTIONS[acao];
         if (!def)
             return interaction.reply({ content: 'Ação inválida.', ephemeral: true });
-        // Verificar NSFW
-        if (def.nsfw) {
-            const channel = interaction.channel;
-            if (!channel?.nsfw) {
-                return interaction.reply({ content: '🔞 Esta ação só pode ser usada em canais marcados como 18+!', ephemeral: true });
-            }
-        }
         await interaction.deferReply();
         const [senderDb, targetDb, target2Db] = await Promise.all([
             client_1.prisma.member.findUnique({ where: { discordId: interaction.user.id } }),

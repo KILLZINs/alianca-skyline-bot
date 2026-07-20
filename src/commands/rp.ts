@@ -286,13 +286,7 @@ export default {
     const def      = ACTIONS[acao];
     if (!def) return interaction.reply({ content: 'Ação inválida.', ephemeral: true });
 
-    // Verificar NSFW
-    if (def.nsfw) {
-      const channel = interaction.channel as any;
-      if (!channel?.nsfw) {
-        return interaction.reply({ content: '🔞 Esta ação só pode ser usada em canais marcados como 18+!', ephemeral: true });
-      }
-    }
+
 
     await interaction.deferReply();
 
