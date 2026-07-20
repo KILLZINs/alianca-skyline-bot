@@ -52,12 +52,13 @@ export function buildDungeonEmbed(char: FullCharacter): EmbedBuilder {
   embed.addFields(
     { name: '👹 Inimigos da Região', value: enemyList, inline: false },
     { name: '💀 Bosses', value: bossList, inline: false },
+    { name: '🔮 Tipos de Dungeon', value: '> Use o **2º menu** abaixo para escolher um tipo especial com bônus de XP/Ouro (Fogo, Gelo, Sombra, Trovão, Abissal)', inline: false },
     { name: '❤️ HP', value: hpDisplay, inline: true },
     { name: '⚡ Energia', value: `**${char.currentEnergy}/${stats.maxEnergy}**`, inline: true },
     { name: '⏱️ Cooldown', value: cd.onCooldown ? `🔴 ${cd.remaining}` : '🟢 Pronto!', inline: true },
   );
 
-  return embed.setFooter({ text: 'Selecione o inimigo para batalhar. Bosses dão muito mais recompensa!' });
+  return embed.setFooter({ text: '⚔️ Selecione um inimigo normal OU escolha um Tipo de Dungeon para bônus especiais de XP/Ouro!' });
 }
 
 export function buildDungeonSelect(char: FullCharacter): ActionRowBuilder<StringSelectMenuBuilder> | null {

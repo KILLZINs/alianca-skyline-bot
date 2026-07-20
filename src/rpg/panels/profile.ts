@@ -196,45 +196,46 @@ export function buildProfileEmbed(char: FullCharacter, stats: ComputedStats): Em
 // ─── Botões do perfil ──────────────────────────────────────────────────────────
 
 export function buildProfileButtons(char: FullCharacter): ActionRowBuilder<ButtonBuilder>[] {
-  // Linha 1: ações principais (combate e exploração)
+  // ── Linha 1: Aventura — ações principais de combate e mundo ──────────────────
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:dungeon').setLabel('⚔️ Dungeon').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('rpg:viajar').setLabel('🗺️ Viajar').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:exploracao').setLabel('🌍 Explorar').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:perfil').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Secondary),
   );
 
-  // Linha 2: gerenciamento e acesso rápido
+  // ── Linha 2: Personagem — gerenciamento do personagem ────────────────────────
+  const pontosLabel = char.statPoints > 0 ? `⭐ Pontos (${char.statPoints}) ←` : '⭐ Pontos';
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('rpg:cidade').setLabel('🏰 Cidade').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('rpg:inventario').setLabel('🎒 Inventário').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:habilidades').setLabel('✨ Habilidades').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('rpg:stats').setLabel('📊 Estatísticas').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('rpg:pontos')
-      .setLabel(char.statPoints > 0 ? `⭐ Pontos (${char.statPoints}) ←` : '⭐ Pontos')
+      .setLabel(pontosLabel)
       .setStyle(char.statPoints > 0 ? ButtonStyle.Danger : ButtonStyle.Secondary)
       .setDisabled(char.statPoints === 0),
+    new ButtonBuilder().setCustomId('rpg:stats').setLabel('📊 Estatísticas').setStyle(ButtonStyle.Secondary),
   );
 
-  // Linha 3: novos sistemas (meditação, treino, taverna, pesca, exploração)
+  // ── Linha 3: Missões — quests e progressão de classe ─────────────────────────
+  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('rpg:missoes').setLabel('📋 Missões').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(ButtonStyle.Primary),
+  );
+
+  // ── Linha 4: Atividades — treinamento e lazer ─────────────────────────────────
   const isMeditating = !!(char as any).meditatingUntil && new Date((char as any).meditatingUntil) > new Date();
   const meditaReady  = !!(char as any).meditatingUntil && new Date((char as any).meditatingUntil) <= new Date();
-  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('rpg:meditar')
-      .setLabel(meditaReady ? '🪷 Coletar' : isMeditating ? '🧘 Meditando...' : '🧘 Meditar')
+      .setLabel(meditaReady ? '🪷 Coletar Meditação' : isMeditating ? '🧘 Meditando...' : '🧘 Meditar')
       .setStyle(meditaReady ? ButtonStyle.Success : ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:treinar').setLabel('🥊 Treinar').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('rpg:taverna').setLabel('🍺 Taverna').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('rpg:pescaria').setLabel('🎣 Pescar').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('rpg:exploracao').setLabel('🌍 Explorar').setStyle(ButtonStyle.Success),
-  );
-
-  // Linha 4: missões de classe e eventos de mundo
-  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('rpg:missoes_classe').setLabel('📜 Missões de Classe').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('rpg:eventos').setLabel('🌎 Eventos').setStyle(ButtonStyle.Danger),
   );
 
   return [row1, row2, row3, row4];
