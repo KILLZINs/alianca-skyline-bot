@@ -180,14 +180,14 @@ export default {
       // Só dispara com 40% de chance para variar o horário
       if (Math.random() > 0.4) return;
       try {
-        const { startRandomWorldEvent } = await import('./rpg/panels/world-events');
+        const { startRandomWorldEvent } = await import('../rpg/panels/world-events');
         let started = 0;
         for (const [, guild] of client.guilds.cache) {
           const result = await startRandomWorldEvent(guild.id).catch(() => ({ success: false }));
           if (result.success && (result as any).name) {
             started++;
             // Tenta anunciar o evento no canal de anúncios configurado
-            const { prisma: db } = await import('./database/client');
+            const { prisma: db } = await import('../database/client');
             const config = await db.guildConfig.findUnique({ where: { guildId: guild.id } }).catch(() => null);
             const channelId = config?.announcementChannelId ?? config?.welcomeChannelId;
             if (channelId) {
