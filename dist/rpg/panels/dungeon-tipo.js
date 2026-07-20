@@ -203,6 +203,28 @@ async function doBattleWithType(char, dungeonTypeId, useRandom = true, enemyId, 
     if (xpGained > 0) {
         await client_1.prisma.rpgCharacter.update({ where: { discordId: char.discordId }, data: { xp: { increment: xpGained } } });
     }
+    // ── XP de habilidade divina (toda vitória com XP ganho) ──────────────────────
+    if (xpGained > 0 && char.divineSkillId) {
+        const { DIVINE_SKILLS } = await Promise.resolve().then(() => __importStar(require('../constants/skills')));
+        const skill = DIVINE_SKILLS[char.divineSkillId];
+        if (skill) {
+            const SKILL_RANKS = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+            const RANK_MULT = [1, 2, 4, 8, 16, 32, 64, 128];
+            const skillXpGain = Math.max(5, Math.floor(xpGained * 0.12));
+            const newSkillExp = char.divineSkillExp + skillXpGain;
+            const rankIdx = SKILL_RANKS.indexOf(char.divineSkillRank);
+            const requiredXp = skill.rankUpExpRequired * (RANK_MULT[rankIdx] ?? 1);
+            const canRankUp = rankIdx >= 0 && rankIdx < SKILL_RANKS.length - 1 && newSkillExp >= requiredXp;
+            const newRank = canRankUp ? SKILL_RANKS[rankIdx + 1] : char.divineSkillRank;
+            await client_1.prisma.rpgCharacter.update({
+                where: { discordId: char.discordId },
+                data: { divineSkillExp: canRankUp ? 0 : newSkillExp, divineSkillRank: newRank },
+            });
+            log.push(`✨ **${skill.name}** +**${skillXpGain} XP** de habilidade (${canRankUp ? 0 : newSkillExp}/${requiredXp})`);
+            if (canRankUp)
+                log.push(`🌟 **RANK UP!** ${skill.emoji} **${skill.name}** → Rank **${newRank}**! 🎊`);
+        }
+    }
     const color = won ? dungeonType.color : 0x555555;
     const title = won
         ? `${dungeonType.emoji} Vitória na Dungeon ${dungeonType.name}!`

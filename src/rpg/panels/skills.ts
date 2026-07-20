@@ -19,7 +19,13 @@ export function buildHabilidadesEmbed(char: FullCharacter): { embed: EmbedBuilde
         `${ds.emoji} **${ds.name}** [Rank **${char.divineSkillRank}**]`,
         `> ${ds.description}`,
         `> Tipo: \`${ds.type}\` | Custo: \`${ds.energyCost} Energia\``,
-        next ? `> XP para Rank ${next}: **${char.divineSkillExp}/${ds.rankUpExpRequired}**` : '> **RANK MÁXIMO SSS** 🌟',
+        next ? (() => {
+          const SKILL_RANKS = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
+          const RANK_MULT   = [1, 2, 4, 8, 16, 32, 64, 128];
+          const rankIdx     = SKILL_RANKS.indexOf(char.divineSkillRank as string);
+          const requiredXp  = ds.rankUpExpRequired * (RANK_MULT[rankIdx] ?? 1);
+          return `> XP para Rank ${next}: **${char.divineSkillExp}/${requiredXp}**`;
+        })() : '> **RANK MÁXIMO SSS** 🌟',
       ].join('\n');
     }
   }

@@ -174,15 +174,22 @@ async function runCombat(char, enemy, useSkill = false, guildId) {
     if (xpGained > 0) {
         await (0, character_1.addRpgXp)(char, xpGained);
     }
-    // ── XP de habilidade divina (se foi usada neste combate) ──────────────────
-    if (state.usedSkillThisRound && char.divineSkillId) {
+    // ── XP de habilidade divina (toda batalha com XP ganho) ─────────────────────
+    // XP maior se habilidade foi ativada; menor se batalhou sem ela
+    if (xpGained > 0 && char.divineSkillId) {
         const skill = skills_1.DIVINE_SKILLS[char.divineSkillId];
         if (skill) {
             const SKILL_RANKS = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
-            const skillXpGain = Math.max(30, Math.floor(xpGained * 0.5));
+            // Habilidade usada: 40% do XP (min 25); não usada: 10% (min 5)
+            const skillXpGain = state.usedSkillThisRound
+                ? Math.max(25, Math.floor(xpGained * 0.4))
+                : Math.max(5, Math.floor(xpGained * 0.1));
             const newSkillExp = char.divineSkillExp + skillXpGain;
             const rankIdx = SKILL_RANKS.indexOf(char.divineSkillRank);
-            const canRankUp = rankIdx >= 0 && rankIdx < SKILL_RANKS.length - 1 && newSkillExp >= skill.rankUpExpRequired;
+            // Multiplicador exponencial por rank — rank S exige 64× o valor base
+            const RANK_MULT = [1, 2, 4, 8, 16, 32, 64, 128];
+            const requiredXp = skill.rankUpExpRequired * (RANK_MULT[rankIdx] ?? 1);
+            const canRankUp = rankIdx >= 0 && rankIdx < SKILL_RANKS.length - 1 && newSkillExp >= requiredXp;
             const newRank = canRankUp ? SKILL_RANKS[rankIdx + 1] : char.divineSkillRank;
             await client_1.prisma.rpgCharacter.update({
                 where: { discordId: char.discordId },
@@ -191,7 +198,8 @@ async function runCombat(char, enemy, useSkill = false, guildId) {
                     divineSkillRank: newRank,
                 },
             });
-            state.log.push(`\n✨ **${skill.name}** +**${skillXpGain} XP** de habilidade (${canRankUp ? 0 : newSkillExp}/${skill.rankUpExpRequired})`);
+            const usedMark = state.usedSkillThisRound ? ' ✨' : '';
+            state.log.push(`\n✨ **${skill.name}** +**${skillXpGain} XP** de habilidade${usedMark} (${canRankUp ? 0 : newSkillExp}/${requiredXp})`);
             if (canRankUp) {
                 state.log.push(`🌟 **RANK UP!** ${skill.emoji} **${skill.name}** → Rank **${newRank}**! 🎊`);
             }
