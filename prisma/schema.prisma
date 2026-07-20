@@ -288,6 +288,20 @@ model GuildConfig {
   xpCooldown            Int      @default(60)
   antiSpam              Boolean  @default(false)
   antiLinks             Boolean  @default(false)
+
+  // ─── Feature Toggles — owner/admin pode habilitar ou desabilitar por servidor ───
+  featLeveling      Boolean  @default(true)
+  featRpg           Boolean  @default(true)
+  featTickets       Boolean  @default(true)
+  featPolls         Boolean  @default(true)
+  featGiveaways     Boolean  @default(true)
+  featSelfRole      Boolean  @default(true)
+  featMissions      Boolean  @default(true)
+  featSocial        Boolean  @default(true)
+  featEconomy       Boolean  @default(true)
+  featMod           Boolean  @default(true)
+  featAnnouncements Boolean  @default(true)
+
   logFlags              Int      @default(31)
   updatedAt             DateTime @updatedAt @default(now())
 

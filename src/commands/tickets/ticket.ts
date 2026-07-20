@@ -14,6 +14,10 @@ export default {
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     if (!(await checkAdmin(interaction))) return;
+    const { isFeatureEnabled, featureDisabledMsg } = await import('../../utils/features');
+    if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featTickets'))) {
+      return interaction.reply({ content: featureDisabledMsg('featTickets'), ephemeral: true });
+    }
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'painel') {

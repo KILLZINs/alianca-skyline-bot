@@ -47,6 +47,24 @@ export const EMBED_CATALOG: Record<string, EmbedCatalogEntry> = {
   'mission.weekly.complete':{ label: '📆 Missão Semanal Completa',  category: 'missoes',   desc: 'Embed de missão semanal concluída' },
   // Aliança
   'alliance.official':     { label: '🌐 Embed Oficial Aliança',     category: 'alianca',  desc: 'Embed com lista oficial dos servidores da aliança' },
+  // Tickets
+  'ticket.create':         { label: '🎫 Ticket Criado',             category: 'tickets',  desc: 'Embed exibido quando um ticket é aberto' },
+  'ticket.close':          { label: '🔒 Ticket Fechado',            category: 'tickets',  desc: 'Embed exibido quando um ticket é fechado' },
+  'ticket.claim':          { label: '🛡️ Ticket Assumido',           category: 'tickets',  desc: 'Embed quando um moderador assume o ticket' },
+  // Sorteios
+  'giveaway.start':        { label: '🎁 Sorteio Iniciado',          category: 'sorteios', desc: 'Embed do sorteio ativo aguardando participantes' },
+  'giveaway.win':          { label: '🏆 Vencedor do Sorteio',       category: 'sorteios', desc: 'Embed de anúncio dos vencedores' },
+  // Moderação
+  'mod.warn':              { label: '⚠️ Aviso Emitido',             category: 'moderacao',desc: 'Embed de aviso de moderação aplicado' },
+  'mod.ban':               { label: '🔨 Ban Aplicado',              category: 'moderacao',desc: 'Embed de ban aplicado ao membro' },
+  'mod.kick':              { label: '👢 Kick Aplicado',             category: 'moderacao',desc: 'Embed de kick aplicado ao membro' },
+  // Registro de Cargos
+  'selfrole.add':          { label: '✅ Cargo Adicionado',          category: 'selfrole', desc: 'Mensagem ephemeral quando o membro recebe um cargo' },
+  'selfrole.remove':       { label: '❌ Cargo Removido',            category: 'selfrole', desc: 'Mensagem ephemeral quando o membro perde um cargo' },
+  // RPG miscelânea
+  'rpg.levelup':           { label: '🌟 Level Up RPG',             category: 'rpg',      desc: 'Notificação de subida de nível no RPG' },
+  'rpg.reincarnation':     { label: '✨ Reencarnação RPG',         category: 'rpg',      desc: 'Embed de reencarnação do personagem' },
+  'rpg.marriage.proposal': { label: '💍 Proposta de Casamento RPG',category: 'rpg',      desc: 'Proposta de casamento dentro do RPG' },
 };
 
 export const EMBED_CATEGORIES: Record<string, string> = {
@@ -56,6 +74,10 @@ export const EMBED_CATEGORIES: Record<string, string> = {
   casamento:   '💍 Casamento',
   missoes:     '📋 Missões',
   alianca:     '🌐 Aliança',
+  tickets:     '🎫 Tickets',
+  sorteios:    '🎁 Sorteios',
+  moderacao:   '🔨 Moderação',
+  selfrole:    '🎭 Registro de Cargos',
 };
 
 // ── Cache em memória ───────────────────────────────────────────────────

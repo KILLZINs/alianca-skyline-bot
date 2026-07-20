@@ -7,6 +7,7 @@ import {
 import { prisma } from '../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed, warningEmbed, rankEmoji, levelBar, colorFromLevel } from '../utils/embeds';
 import { getOrCreateMember, getConfig, formatDuration } from '../utils/helpers';
+import { FEATURE_META, FEATURE_KEYS, type FeatureKey } from '../utils/features';
 import { xpForNextLevel, RANKS } from '../types';
 import { checkAdmin, checkModerator } from '../utils/permissions';
 import { ensureDailyMissions } from '../commands/utility/missoes';
@@ -395,6 +396,41 @@ async function adminButtons(i: ButtonInteraction, action: string) {
       new ButtonBuilder().setCustomId('config:welcome').setLabel('Boas-vindas').setEmoji('👋').setStyle(ButtonStyle.Secondary),
     );
     return i.reply({ embeds: [embed], components: [row1], ephemeral: true });
+  }
+
+  if (action === 'modulos') {
+    if (!(await checkAdmin(interaction))) return;
+    await i.deferReply({ ephemeral: true });
+    const cfg = await getConfig(guild.id);
+    const embed = buildModulosEmbed(cfg as Record<string, unknown>, guild.name);
+    const rows = buildModulosRows(cfg as Record<string, unknown>);
+    return i.editReply({ embeds: [embed], components: rows });
+  }
+
+  if (action === 'toggle_feat') {
+    if (!(await checkAdmin(interaction))) return;
+    await i.deferUpdate();
+    const feat = extra[0] as FeatureKey;
+    if (!feat || !FEATURE_KEYS.includes(feat)) return;
+    const cfg = await getConfig(guild.id);
+    const current = ((cfg as Record<string, unknown>)[feat] as boolean) ?? true;
+    await prisma.guildConfig.update({
+      where: { guildId: guild.id },
+      data:  { [feat]: !current },
+    });
+    const updated = await getConfig(guild.id);
+    const embed = buildModulosEmbed(updated as Record<string, unknown>, guild.name);
+    const rows  = buildModulosRows(updated as Record<string, unknown>);
+    return i.editReply({ embeds: [embed], components: rows });
+  }
+
+  if (action === 'mod') {
+    if (!(await checkAdmin(interaction))) return;
+    await i.deferReply({ ephemeral: true });
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('🔨 Moderação Rápida')
+      .setDescription('Use os comandos de moderação ou o painel `/mod` para ações rápidas.');
+    return i.editReply({ embeds: [embed] });
   }
 
   if (action === 'allowlist') {
@@ -1263,6 +1299,50 @@ async function selfRoleAdminButtons(i: ButtonInteraction, action: string, extra:
     return i.editReply({ embeds: [successEmbed('✅ Menu Publicado!', `Menu **${menu.title}** publicado em ${targetChannel} com **${menu.entries.length}** cargo(s)!`)], components: [] });
   }
 }
+
+// ─── Módulos: build helpers ───────────────────────────────────────────────────
+
+function buildModulosEmbed(cfg: Record<string, unknown>, guildName: string): EmbedBuilder {
+  const lines = FEATURE_KEYS.map(k => {
+    const m = FEATURE_META[k];
+    const on = (cfg[k] as boolean) !== false;
+    return (on ? '✅' : '❌') + ' ' + m.emoji + ' **' + m.label + '** — ' + m.desc;
+  });
+
+  return baseEmbed(COLORS.PRIMARY)
+    .setTitle('🔧 Módulos — ' + guildName)
+    .setDescription(
+      'Clique em um módulo para **habilitar** ou **desabilitar** neste servidor.\n\n' +
+      lines.join('\n')
+    )
+    .setFooter({ text: 'Mudanças têm efeito imediato • ✅ = ativo • ❌ = inativo' });
+}
+
+function buildModulosRows(cfg: Record<string, unknown>): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  let row = new ActionRowBuilder<ButtonBuilder>();
+  let count = 0;
+
+  for (const k of FEATURE_KEYS) {
+    if (count > 0 && count % 5 === 0) {
+      rows.push(row);
+      row = new ActionRowBuilder<ButtonBuilder>();
+    }
+    const m  = FEATURE_META[k];
+    const on = (cfg[k] as boolean) !== false;
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId('admin:toggle_feat:' + k)
+        .setLabel(m.label)
+        .setEmoji(on ? '✅' : '❌')
+        .setStyle(on ? ButtonStyle.Success : ButtonStyle.Danger),
+    );
+    count++;
+  }
+  if (count % 5 !== 0 || count === 0) rows.push(row);
+  return rows;
+}
+
 
 // ── Selfrole — toggle de cargo por botão ────────────────────────────────────
 async function selfRoleToggle(i: ButtonInteraction, extra: string[]) {

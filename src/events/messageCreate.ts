@@ -65,6 +65,9 @@ export default {
       }
     }
 
+    // ─── Feature gate: XP/Leveling ───────────────────────────────────────────
+    if (!config.featLeveling) return;
+
     // ─── XP cooldown — chave por guildId:userId ───────────────────────────────
     const now       = Date.now();
     const cdKey     = `${guildId}:${authorId}`;
@@ -82,11 +85,11 @@ export default {
     // ─── RPG: regen de energia via chat (fire-and-forget) ────────────────────
     applyChatEnergyRegen(authorId).catch(() => null);
 
-    // ─── Mission progress ─────────────────────────────────────────────────────
+    // ─── Mission progress (only if featMissions enabled) ─────────────────────
     const dateStr = today();
     const weekStr = thisWeek();
 
-    await Promise.all([
+    if (config.featMissions) await Promise.all([
       // Diárias
       prisma.dailyMission.updateMany({
         where: { memberId: authorId, guildId, type: 'estar_online',     dateStr, completed: false },
@@ -111,7 +114,10 @@ export default {
       }),
     ]).catch(() => null);
 
-    // Marcar missões concluídas (diárias)
+    // Marcar missões concluídas (só se featMissions habilitado)
+    if (!config.featMissions) {
+      // skip mission completion tracking
+    } else {
     prisma.dailyMission.findMany({ where: { memberId: authorId, guildId, dateStr, completed: false } })
       .then(pending => Promise.all(
         pending.filter(m => m.progress >= m.target).map(m =>
@@ -126,6 +132,8 @@ export default {
           prisma.weeklyMission.update({ where: { id: m.id }, data: { completed: true } })
         )
       )).catch(() => null);
+
+    } // end featMissions
 
     // ─── Level up ─────────────────────────────────────────────────────────────
     if (before && after.level > before.level) {

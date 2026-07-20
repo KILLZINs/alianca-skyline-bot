@@ -26,6 +26,7 @@ export default {
         { name: '📈 Estatísticas',        value: 'Stats detalhados do servidor',       inline: true },
         { name: '🔨 Moderação',           value: 'Ações de moderação rápida',          inline: true },
         { name: '🎭 Registro de Cargos',  value: 'Menus de auto-cargo para membros',   inline: true },
+        { name: '🔧 Módulos',              value: 'Habilitar/desabilitar features',      inline: true },
         ...(showAllowlist ? [{ name: '🌐 Acesso (Allowlist)', value: 'Servidores e managers autorizados', inline: true }] : []),
       )
       .setTimestamp()
@@ -51,7 +52,11 @@ export default {
       new ButtonBuilder().setCustomId('admin:stats').setLabel('Estatísticas').setEmoji('📈').setStyle(ButtonStyle.Secondary),
     );
 
-    const components: ActionRowBuilder<ButtonBuilder>[] = [row1, row2, row3];
+    const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('admin:modulos').setLabel('Módulos').setEmoji('🔧').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('admin:mod').setLabel('Moderação').setEmoji('🔨').setStyle(ButtonStyle.Secondary),
+    );
+    const components: ActionRowBuilder<ButtonBuilder>[] = [row1, row2, row3, row4];
 
     if (showAllowlist) {
       const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(

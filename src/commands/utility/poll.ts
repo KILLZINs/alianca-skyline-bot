@@ -19,6 +19,10 @@ export default {
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     if (!(await checkAdmin(interaction))) return;
+    const { isFeatureEnabled, featureDisabledMsg } = await import('../../utils/features');
+    if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featPolls'))) {
+      return interaction.reply({ content: featureDisabledMsg('featPolls'), ephemeral: true });
+    }
     const sub = interaction.options.getSubcommand();
     if (sub !== 'criar') return;
 

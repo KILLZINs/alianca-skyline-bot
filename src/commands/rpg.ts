@@ -28,6 +28,12 @@ export default {
     .addSubcommand(sub => sub.setName('info').setDescription('Info sobre uma classe').addStringOption(o => o.setName('classe').setDescription('ID da classe').setRequired(true))),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // Feature gate
+    const { isFeatureEnabled, featureDisabledMsg } = await import('../utils/features');
+    if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featRpg'))) {
+      return interaction.reply({ content: featureDisabledMsg('featRpg'), ephemeral: true });
+    }
+
     const sub = interaction.options.getSubcommand();
     const discordId = interaction.user.id;
     const username  = interaction.user.username;

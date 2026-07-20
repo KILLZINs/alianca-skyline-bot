@@ -270,6 +270,11 @@ export default {
     .addUserOption(o => o.setName('alvo2').setDescription('Segundo alvo (trisal / beijo triplo)').setRequired(false)),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const { isFeatureEnabled, featureDisabledMsg } = await import('../utils/features');
+    if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featSocial'))) {
+      return interaction.reply({ content: featureDisabledMsg('featSocial'), ephemeral: true });
+    }
+
     const acao     = (interaction.options.getString('acao') ?? interaction.options.getString('acao_especial')) as keyof typeof ACTIONS | null;
     if (!acao) {
       return interaction.reply({ content: '❌ Escolha uma ação! Use `/rp acao:` ou `/rp acao_especial:`', ephemeral: true });
