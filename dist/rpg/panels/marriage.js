@@ -9,6 +9,7 @@ exports.buildProposalModal = buildProposalModal;
 exports.buildDivorceConfirmEmbed = buildDivorceConfirmEmbed;
 const discord_js_1 = require("discord.js");
 const marriage_1 = require("../services/marriage");
+const embedTemplates_1 = require("../../utils/embedTemplates");
 // ─── Embed de casamento ────────────────────────────────────────────────
 async function buildMarriageEmbed(userId, client) {
     const marriage = await (0, marriage_1.getMarriage)(userId);
@@ -45,6 +46,7 @@ async function buildMarriageEmbed(userId, client) {
         embed.addFields({ name: `💌 Pedidos de Casamento (${proposals.length})`, value: proposalLines });
     }
     embed.setFooter({ text: '⚔️ Aliança Skyline RPG — Sistema de Casamento' });
+    (0, embedTemplates_1.applyTemplate)(embed, 'marriage.married');
     return embed;
 }
 // ─── Botões de casamento ───────────────────────────────────────────────
@@ -107,11 +109,13 @@ function buildProposalModal() {
 }
 // ─── Confirmação de divórcio ───────────────────────────────────────────
 function buildDivorceConfirmEmbed() {
-    return new discord_js_1.EmbedBuilder()
+    const embed = new discord_js_1.EmbedBuilder()
         .setColor(0xE74C3C)
         .setTitle('💔 Confirmar Divórcio')
         .setDescription('⚠️ Tem certeza que deseja se divorciar?\n\n' +
         'Esta ação **não pode ser desfeita**.\n' +
         'Você perderá todos os benefícios do casamento.');
+    (0, embedTemplates_1.applyTemplate)(embed, 'marriage.divorced');
+    return embed;
 }
 //# sourceMappingURL=marriage.js.map

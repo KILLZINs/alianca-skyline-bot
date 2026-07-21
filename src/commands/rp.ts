@@ -6,6 +6,7 @@ import { Command } from '../types';
 import { prisma } from '../database/client';
 import { COLORS } from '../utils/embeds';
 import { getBotConfig } from '../utils/botConfig';
+import { applyTemplate } from '../utils/embedTemplates';
 
 // ─── GIF LIBRARY ────────────────────────────────────────────────────────────
 
@@ -317,6 +318,7 @@ export default {
       .setFooter({ text: getBotConfig().rpFooterText })
       .setTimestamp();
 
+    applyTemplate(embed, 'rp');
     await interaction.editReply({ embeds: [embed] });
   },
 } satisfies Command;

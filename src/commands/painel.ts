@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Command } from '../types';
 import { COLORS, EMOJIS } from '../utils/embeds';
+import { applyTemplate } from '../utils/embedTemplates';
 
 export default {
   category: 'geral',
@@ -51,6 +52,7 @@ export default {
       new ButtonBuilder().setCustomId('rpg:perfil').setLabel('RPG').setEmoji('⚔️').setStyle(ButtonStyle.Danger),
     );
 
+    applyTemplate(embed, 'painel');
     await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4] });
   },
 } satisfies Command;

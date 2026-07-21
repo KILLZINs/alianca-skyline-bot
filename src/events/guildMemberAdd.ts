@@ -93,6 +93,7 @@ export default {
         .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
         .setTimestamp();
 
+      applyTemplate(dmEmbed, 'welcome.dm');
       await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null); // DMs podem estar fechadas
     } catch { /* silently ignore DM errors */ }
   },

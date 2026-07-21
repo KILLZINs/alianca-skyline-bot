@@ -12,6 +12,7 @@ import { xpForNextLevel, RANKS } from '../types';
 import { checkAdmin, checkModerator } from '../utils/permissions';
 import { ensureDailyMissions } from '../commands/utility/missoes';
 import { isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
+import { applyTemplate } from '../utils/embedTemplates';
 
 export async function handleButton(interaction: ButtonInteraction) {
   const parts = interaction.customId.split(':');
@@ -1359,16 +1360,16 @@ async function selfRoleToggle(i: ButtonInteraction, extra: string[]) {
   try {
     if (hasRole) {
       await member.roles.remove(roleId);
-      return i.editReply({
-        embeds: [new EmbedBuilder().setColor(0xE74C3C)
-          .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`)],
-      });
+      const remEmbed = new EmbedBuilder().setColor(0xE74C3C)
+        .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`);
+      applyTemplate(remEmbed, 'selfrole.remove');
+      return i.editReply({ embeds: [remEmbed] });
     } else {
       await member.roles.add(roleId);
-      return i.editReply({
-        embeds: [new EmbedBuilder().setColor(0x2ECC71)
-          .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`)],
-      });
+      const addEmbed = new EmbedBuilder().setColor(0x2ECC71)
+        .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`);
+      applyTemplate(addEmbed, 'selfrole.add');
+      return i.editReply({ embeds: [addEmbed] });
     }
   } catch {
     return i.editReply({

@@ -10,6 +10,7 @@ exports.updateAllServerClasses = updateAllServerClasses;
 const discord_js_1 = require("discord.js");
 const client_1 = require("../database/client");
 const embeds_1 = require("./embeds");
+const embedTemplates_1 = require("./embedTemplates");
 exports.SERVER_CLASSES = [
     { name: 'Cosmos', emoji: '🌌', color: 0x9B59B6, minMembers: 10000 },
     { name: 'Galaxy', emoji: '🌠', color: 0x8E44AD, minMembers: 5000 },
@@ -74,18 +75,20 @@ async function buildOfficialAllianceEmbed(client) {
     }
     if (!description.trim())
         description = '*Nenhum servidor cadastrado ainda.*';
-    return new discord_js_1.EmbedBuilder()
+    const allianceEmbed = new discord_js_1.EmbedBuilder()
         .setColor(embeds_1.COLORS.PRIMARY)
         .setTitle('🌌 Aliança Skyline — Servidores Oficiais')
         .setDescription(description)
         .addFields({
         name: '📊 Resumo',
-        value: `**${servers.length}** servidor(es) • **${totalMembers.toLocaleString('pt-BR')}** membros totais`,
+        value: `\*\*${servers.length}\*\* servidor(es) • \*\*${totalMembers.toLocaleString('pt-BR')}\*\* membros totais`,
         inline: false,
     })
         .setThumbnail(client.user?.displayAvatarURL() ?? null)
         .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
         .setTimestamp();
+    (0, embedTemplates_1.applyTemplate)(allianceEmbed, 'alliance.official');
+    return allianceEmbed;
 }
 // ─── Atualiza classes de todos os servidores ──────────────────────────────────
 async function updateAllServerClasses(client) {

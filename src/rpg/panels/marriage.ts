@@ -7,6 +7,7 @@ import {
   ModalBuilder, TextInputBuilder, TextInputStyle,
 } from 'discord.js';
 import { getMarriage, getPendingProposals, getPartner } from '../services/marriage';
+import { applyTemplate } from '../../utils/embedTemplates';
 
 // ─── Embed de casamento ────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export async function buildMarriageEmbed(userId: string, client: any): Promise<E
   }
 
   embed.setFooter({ text: '⚔️ Aliança Skyline RPG — Sistema de Casamento' });
+  applyTemplate(embed, 'marriage.married');
   return embed;
 }
 
@@ -151,7 +153,7 @@ export function buildProposalModal(): ModalBuilder {
 // ─── Confirmação de divórcio ───────────────────────────────────────────
 
 export function buildDivorceConfirmEmbed(): EmbedBuilder {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0xE74C3C)
     .setTitle('💔 Confirmar Divórcio')
     .setDescription(
@@ -159,4 +161,6 @@ export function buildDivorceConfirmEmbed(): EmbedBuilder {
       'Esta ação **não pode ser desfeita**.\n' +
       'Você perderá todos os benefícios do casamento.',
     );
+  applyTemplate(embed, 'marriage.divorced');
+  return embed;
 }

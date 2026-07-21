@@ -1,6 +1,7 @@
 import { Client, EmbedBuilder } from 'discord.js';
 import { prisma } from '../database/client';
 import { COLORS } from './embeds';
+import { applyTemplate } from './embedTemplates';
 
 // ─── Classes de servidor ──────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export async function buildOfficialAllianceEmbed(client: Client): Promise<EmbedB
 
   if (!description.trim()) description = '*Nenhum servidor cadastrado ainda.*';
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle('🌌 Aliança Skyline — Servidores Oficiais')
     .setDescription(description)
@@ -96,6 +97,8 @@ export async function buildOfficialAllianceEmbed(client: Client): Promise<EmbedB
     .setThumbnail(client.user?.displayAvatarURL() ?? null)
     .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
     .setTimestamp();
+  applyTemplate(embed, 'alliance.official');
+  return embed;
 }
 
 // ─── Atualiza classes de todos os servidores ──────────────────────────────────

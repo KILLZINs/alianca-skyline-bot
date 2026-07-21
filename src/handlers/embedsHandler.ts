@@ -362,7 +362,7 @@ export async function startImageUploadCollector(
       const attachment = msg.attachments.first() as Attachment | undefined;
       if (!attachment) return;
 
-      const imageUrl = attachment.url;
+      const imageUrl = attachment.url.split("?")[0];
 
       // Validar se é imagem
       const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];

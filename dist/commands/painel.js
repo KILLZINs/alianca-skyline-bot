@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
 const embeds_1 = require("../utils/embeds");
+const embedTemplates_1 = require("../utils/embedTemplates");
 exports.default = {
     category: 'geral',
     data: new discord_js_1.SlashCommandBuilder().setName('painel').setDescription('Painel principal da Aliança Skyline'),
@@ -18,6 +19,7 @@ exports.default = {
         const row2 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('painel:economia').setLabel('Economia').setEmoji('🪙').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('painel:loja').setLabel('Loja').setEmoji('🛍️').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('painel:missoes').setLabel('Missões').setEmoji('🔥').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('painel:servidor').setLabel('Servidor').setEmoji('📊').setStyle(discord_js_1.ButtonStyle.Primary));
         const row3 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('painel:rede').setLabel('Rede').setEmoji('🌐').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('painel:ticket').setLabel('Suporte').setEmoji('🎫').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('painel:sorteios').setLabel('Sorteios').setEmoji('🎁').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('painel:eventos').setLabel('Eventos').setEmoji('📌').setStyle(discord_js_1.ButtonStyle.Success));
         const row4 = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('rpg:perfil').setLabel('RPG').setEmoji('⚔️').setStyle(discord_js_1.ButtonStyle.Danger));
+        (0, embedTemplates_1.applyTemplate)(embed, 'painel');
         await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4] });
     },
 };

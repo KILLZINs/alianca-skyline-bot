@@ -37,6 +37,7 @@ const discord_js_1 = require("discord.js");
 const client_1 = require("../database/client");
 const embeds_1 = require("../utils/embeds");
 const botConfig_1 = require("../utils/botConfig");
+const embedTemplates_1 = require("../utils/embedTemplates");
 // ─── GIF LIBRARY ─────────────────────────────────────────────────────────────
 const FALLBACK = {
     abracar: ['https://media.tenor.com/GCpA2vTg06IAAAAC/anime-hug.gif', 'https://media.tenor.com/Y0nwWvRMzFwAAAAC/hug-anime.gif', 'https://media.tenor.com/oiCi-p0r0KEAAAAC/hug-anime.gif'],
@@ -273,6 +274,7 @@ exports.default = {
             .setImage(gifUrl)
             .setFooter({ text: (0, botConfig_1.getBotConfig)().rpFooterText })
             .setTimestamp();
+        (0, embedTemplates_1.applyTemplate)(embed, 'rp');
         await interaction.editReply({ embeds: [embed] });
     },
 };

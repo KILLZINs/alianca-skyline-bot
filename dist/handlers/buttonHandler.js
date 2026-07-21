@@ -43,6 +43,7 @@ const types_1 = require("../types");
 const permissions_1 = require("../utils/permissions");
 const missoes_1 = require("../commands/utility/missoes");
 const allowlist_1 = require("../utils/allowlist");
+const embedTemplates_1 = require("../utils/embedTemplates");
 async function handleButton(interaction) {
     const parts = interaction.customId.split(':');
     const prefix = parts[0];
@@ -1037,16 +1038,20 @@ async function selfRoleToggle(i, extra) {
     try {
         if (hasRole) {
             await member.roles.remove(roleId);
-            return i.editReply({
-                embeds: [new discord_js_1.EmbedBuilder().setColor(0xE74C3C)
-                        .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`)],
+            const remEmbed = new discord_js_1.EmbedBuilder().setColor(0xE74C3C)
+          .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`);
+        (0, embedTemplates_1.applyTemplate)(remEmbed, 'selfrole.remove');
+        return i.editReply({
+                embeds: [remEmbed],
             });
         }
         else {
             await member.roles.add(roleId);
-            return i.editReply({
-                embeds: [new discord_js_1.EmbedBuilder().setColor(0x2ECC71)
-                        .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`)],
+            const addEmbed = new discord_js_1.EmbedBuilder().setColor(0x2ECC71)
+          .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`);
+        (0, embedTemplates_1.applyTemplate)(addEmbed, 'selfrole.add');
+        return i.editReply({
+                embeds: [addEmbed],
             });
         }
     }

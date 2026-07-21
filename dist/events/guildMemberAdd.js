@@ -76,7 +76,8 @@ exports.default = {
                 .setThumbnail(member.client.user?.displayAvatarURL() ?? null)
                 .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
                 .setTimestamp();
-            await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null); // DMs podem estar fechadas
+            (0, embedTemplates_1.applyTemplate)(dmEmbed, 'welcome.dm');
+        await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null); // DMs podem estar fechadas
         }
         catch { /* silently ignore DM errors */ }
     },
