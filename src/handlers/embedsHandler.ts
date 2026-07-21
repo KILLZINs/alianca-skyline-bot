@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // HANDLER: /embeds — customização total de embeds
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 import {
   ButtonInteraction, ModalSubmitInteraction,
@@ -21,21 +21,22 @@ const FIELD_META: Record<string, { label: string; emoji: string; placeholder: st
   description: { label: 'Descrição',       emoji: '📄', placeholder: 'Descrição / conteúdo principal...',  style: TextInputStyle.Paragraph, max: 4000 },
   color:       { label: 'Cor (hex)',        emoji: '🎨', placeholder: '#9B59B6 (hex 6 dígitos)',          style: TextInputStyle.Short,     max: 7    },
   thumbnailUrl:{ label: 'URL Thumbnail',   emoji: '🖼️', placeholder: 'https://...',                       style: TextInputStyle.Short,     max: 512  },
-  imageUrl:    { label: 'URL Imagem',      emoji: '🖼️', placeholder: 'https://... (imagem grande)',       style: TextInputStyle.Short,     max: 512  },
+  imageUrl:    { label: 'URL/Upload Imagem',emoji: '🖼️', placeholder: 'https://... ou enviar arquivo',   style: TextInputStyle.Short,     max: 512  },
   footerText:  { label: 'Texto do Rodapé', emoji: '📝', placeholder: '⚔️ Aliança Skyline',               style: TextInputStyle.Short,     max: 2048 },
   footerIcon:  { label: 'Ícone do Rodapé', emoji: '🔗', placeholder: 'https://... (ícone URL)',           style: TextInputStyle.Short,     max: 512  },
 };
 const ALL_FIELDS = Object.keys(FIELD_META) as Array<keyof typeof FIELD_META>;
 
-// ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // BUILD PANELS
-// ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 export function buildEmbedsHome(): { embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] } {
   const embed = baseEmbed(COLORS.PRIMARY)
     .setTitle('⚙️ Customização de Embeds')
     .setDescription(
       'Personalize **título, descrição, cor, imagens e rodapé** de cada embed do bot.\n\n' +
+      '**📸 Imagens:** Cole URLs ou faça upload de arquivos (máx 512 caracteres ou tamanho de arquivo).\n\n' +
       'Selecione uma categoria para começar:'
     )
     .addFields(
@@ -69,12 +70,13 @@ function buildCategoryPanel(category: string): { embed: EmbedBuilder; rows: Acti
 
   const embed = baseEmbed(COLORS.INFO)
     .setTitle(`${catLabel} — Embeds configuráveis`)
-    .setDescription('Selecione o embed que deseja personalizar:')
-    .addFields(entries.map(([key, e]) => {
-      const tpl = getTemplate(key);
-      const hasConfig = tpl && Object.values(tpl).some(v => v !== null && v !== key);
-      return { name: e.label + (hasConfig ? ' ✅' : ''), value: e.desc, inline: false };
-    }));
+    .setDescription('Selecione o embed que deseja personalizar:');
+  
+  embed.addFields(entries.map(([key, e]) => {
+    const tpl = getTemplate(key);
+    const hasConfig = tpl && Object.values(tpl).some(v => v !== null && v !== key);
+    return { name: e.label + (hasConfig ? ' ✅' : ''), value: e.desc, inline: false };
+  }));
 
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   for (let i = 0; i < entries.length; i += 4) {
@@ -150,9 +152,9 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
   return { embed, rows };
 }
 
-// ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // BUTTON HANDLER (raw — já é chamado com o interaction completo)
-// ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void> {
   if (!await isBotManager(i.user.id)) {
@@ -244,9 +246,9 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// MODAL HANDLER (para submissão dos campos)
-// ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// MODAL HANDLER (para submissão dos campos + upload de attachments)
+// ══════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string): Promise<void> {
   if (!await isBotManager(i.user.id)) {
@@ -259,7 +261,7 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
   if (op === 'field') {
     await i.deferUpdate();
     const [key, field] = rest;
-    const rawValue = i.fields.getTextInputValue('value').trim();
+    let rawValue = i.fields.getTextInputValue('value').trim();
 
     if (!rawValue) {
       // Limpar campo
@@ -271,6 +273,18 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
         return;
       }
       await setTemplateField(key, 'color', colorInt);
+    } else if (field === 'imageUrl' || field === 'thumbnailUrl') {
+      // Verificar se há attachment enviado junto ao modal
+      const attachment = i.message?.attachments?.first();
+      if (attachment) {
+        rawValue = attachment.url;
+      }
+      // Se não há attachment e o valor é uma URL válida, usa a URL digitada
+      if (!rawValue) {
+        await i.editReply({ embeds: [errorEmbed('Sem imagem', 'Forneça uma URL ou upload um arquivo de imagem.')] });
+        return;
+      }
+      await setTemplateField(key, field as any, rawValue);
     } else {
       await setTemplateField(key, field as any, rawValue);
     }
