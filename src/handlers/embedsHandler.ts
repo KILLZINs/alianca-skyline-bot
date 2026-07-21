@@ -121,21 +121,29 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
 
   const rows: ActionRowBuilder<ButtonBuilder>[] = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      ALL_FIELDS.slice(0, 4).map(field =>
-        new ButtonBuilder()
+      ALL_FIELDS.slice(0, 3).map(field => {
+        // Para imageUrl, usar botão de upload em vez de modal
+        if (field === 'imageUrl') {
+          return new ButtonBuilder()
+            .setCustomId(`embeds:upload_image|${key}`)
+            .setLabel(`${FIELD_META[field].emoji} ${FIELD_META[field].label}`)
+            .setStyle(ButtonStyle.Secondary);
+        }
+        return new ButtonBuilder()
           .setCustomId(`embeds:field|${key}|${field}`)
           .setLabel(`${FIELD_META[field].emoji} ${FIELD_META[field].label}`)
-          .setStyle(ButtonStyle.Secondary)
-      )
+          .setStyle(ButtonStyle.Secondary);
+      })
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       [
-        ...ALL_FIELDS.slice(4).map(field =>
-          new ButtonBuilder()
+        ...ALL_FIELDS.slice(3).map(field => {
+          // Para thumbnailUrl também oferecemos modal (mas pode ser expandido)
+          return new ButtonBuilder()
             .setCustomId(`embeds:field|${key}|${field}`)
             .setLabel(`${FIELD_META[field].emoji} ${FIELD_META[field].label}`)
-            .setStyle(ButtonStyle.Secondary)
-        ),
+            .setStyle(ButtonStyle.Secondary);
+        }),
         new ButtonBuilder()
           .setCustomId(`embeds:reset|${key}`)
           .setLabel('🗑️ Resetar Tudo')
@@ -258,8 +266,8 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-// MODAL HANDLER (para submissão dos campos + upload de attachments)
+// ══════════════════════════════════════════════════════════��═════════════════════════════════════════════════════════════════════
+// MODAL HANDLER (para submissão dos campos)
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string): Promise<void> {
