@@ -1,12 +1,12 @@
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // HANDLER: /embeds — customização total de embeds
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 import {
   ButtonInteraction, ModalSubmitInteraction,
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
-  Attachment,
+  Attachment, TextChannel, Message,
 } from 'discord.js';
 import {
   EMBED_CATALOG, EMBED_CATEGORIES,
@@ -16,7 +16,7 @@ import {
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
 import { isBotManager } from '../utils/allowlist';
 
-// ──── Tipos dos campos configuráveis ────────────────────────────────────
+// ──── Tipos dos campos configuráveis ────────────────────────────────────────────────────────────────────────────────────────
 const FIELD_META: Record<string, { label: string; emoji: string; placeholder: string; style: TextInputStyle; max: number }> = {
   title:       { label: 'Título',          emoji: '📌', placeholder: 'Título do embed (máx 256 chars)', style: TextInputStyle.Short,     max: 256  },
   description: { label: 'Descrição',       emoji: '📄', placeholder: 'Descrição / conteúdo principal...',  style: TextInputStyle.Paragraph, max: 4000 },
@@ -28,16 +28,16 @@ const FIELD_META: Record<string, { label: string; emoji: string; placeholder: st
 };
 const ALL_FIELDS = Object.keys(FIELD_META) as Array<keyof typeof FIELD_META>;
 
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // BUILD PANELS
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export function buildEmbedsHome(): { embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] } {
   const embed = baseEmbed(COLORS.PRIMARY)
     .setTitle('⚙️ Customização de Embeds')
     .setDescription(
       'Personalize **título, descrição, cor, imagens e rodapé** de cada embed do bot.\n\n' +
-      '**📸 Imagens:** Cole URLs ou clique no botão de imagem e envie um arquivo!\n\n' +
+      '📸 **Imagens:** Cole URLs ou clique no botão de imagem e envie um arquivo!\n\n' +
       'Selecione uma categoria para começar:'
     )
     .addFields(
@@ -153,9 +153,9 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
   return { embed, rows };
 }
 
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // BUTTON HANDLER (raw — já é chamado com o interaction completo)
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void> {
   if (!await isBotManager(i.user.id)) {
@@ -227,6 +227,17 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
         break;
       }
 
+      case 'upload_image': {
+        // Iniciar collector para upload de imagem
+        const key = rest[0];
+        if (!EMBED_CATALOG[key]) {
+          await i.reply({ embeds: [errorEmbed('Embed não encontrado', `Chave \`${key}\` inválida.`)] });
+          return;
+        }
+        await startImageUploadCollector(i, key);
+        break;
+      }
+
       case 'reset': {
         await i.deferUpdate();
         const key = rest[0];
@@ -247,9 +258,9 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // MODAL HANDLER (para submissão dos campos + upload de attachments)
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string): Promise<void> {
   if (!await isBotManager(i.user.id)) {
@@ -290,9 +301,9 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // COLLECTOR PARA UPLOAD DE IMAGENS (aguarda arquivo do usuário)
-// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function startImageUploadCollector(i: ButtonInteraction, key: string): Promise<void> {
   if (!await isBotManager(i.user.id)) {
@@ -308,17 +319,18 @@ export async function startImageUploadCollector(i: ButtonInteraction, key: strin
     ephemeral: true,
   });
 
-  const filter = (msg: any) => msg.author.id === i.user.id && msg.attachments.size > 0;
-  const collector = i.channel?.createMessageCollector({ filter, time: 120000, max: 1 });
-
-  if (!collector) {
-    await i.followUp({ embeds: [errorEmbed('Erro', 'Não foi possível criar o collector.')], ephemeral: true });
+  const channel = i.channel as TextChannel;
+  if (!channel || !('createMessageCollector' in channel)) {
+    await i.followUp({ embeds: [errorEmbed('Erro', 'Este canal não suporta upload.')], ephemeral: true });
     return;
   }
 
-  collector.on('collect', async (msg) => {
+  const filter = (msg: Message) => msg.author.id === i.user.id && msg.attachments.size > 0;
+  const collector = channel.createMessageCollector({ filter, time: 120000, max: 1 });
+
+  collector.on('collect', async (msg: Message) => {
     try {
-      const attachment = msg.attachments.first() as Attachment;
+      const attachment = msg.attachments.first() as Attachment | undefined;
       if (!attachment) return;
 
       const imageUrl = attachment.url;
@@ -350,7 +362,7 @@ export async function startImageUploadCollector(i: ButtonInteraction, key: strin
     }
   });
 
-  collector.on('end', (collected) => {
+  collector.on('end', (collected: any) => {
     if (collected.size === 0) {
       i.followUp({ embeds: [errorEmbed('⏰ Tempo expirado', 'Você não enviou nenhuma imagem a tempo.')], ephemeral: true }).catch(() => null);
     }
