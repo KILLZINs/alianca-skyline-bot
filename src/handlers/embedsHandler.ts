@@ -362,8 +362,6 @@ export async function startImageUploadCollector(
       const attachment = msg.attachments.first() as Attachment | undefined;
       if (!attachment) return;
 
-      const imageUrl = attachment.url; // URL completa necessária para CDN do Discord
-
       // Validar se é imagem
       const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
       if (!validTypes.includes(attachment.contentType ?? '')) {
@@ -371,7 +369,28 @@ export async function startImageUploadCollector(
         return;
       }
 
-      // Salvar a URL no template
+      // ── Correção: baixar os bytes ANTES de deletar a mensagem ───────────────
+      // URLs do CDN do Discord ficam permanentemente inválidas quando a mensagem
+      // que contém o attachment é deletada — mesmo o endpoint refresh-urls não
+      // consegue recuperá-las. A solução é baixar os bytes enquanto a mensagem
+      // ainda existe, reenviar como mensagem do próprio bot (cujo URL persiste
+      // enquanto essa mensagem existir) e só então salvar essa URL persistente.
+      const imgResponse = await fetch(attachment.url);
+      if (!imgResponse.ok) throw new Error(`Falha ao baixar imagem: ${imgResponse.status}`);
+      const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+      const imgName   = attachment.name ?? 'imagem.png';
+
+      // Deletar a mensagem original do usuário (UX limpo)
+      await msg.delete().catch(() => null);
+
+      // Re-enviar como mensagem do bot para obter URL controlada e persistente
+      const storageMsg = await channel.send({
+        files: [{ attachment: imgBuffer, name: imgName }],
+      });
+      const imageUrl = storageMsg.attachments.first()!.url;
+      // ────────────────────────────────────────────────────────────────────────
+
+      // Salvar a URL persistente no template
       await setTemplateField(key, field as any, imageUrl);
       const { embed, rows } = buildEditPanel(key);
 
@@ -383,8 +402,6 @@ export async function startImageUploadCollector(
         components: rows,
         ephemeral: true,
       });
-
-      await msg.delete().catch(() => null);
     } catch (err) {
       console.error('[Image Upload Error]', err);
       await i.followUp({ embeds: [errorEmbed('Erro', 'Ocorreu um erro ao processar a imagem.')], ephemeral: true });
