@@ -101,7 +101,10 @@ export async function buildOfficialAllianceEmbed(client: Client): Promise<EmbedB
     .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
     .setTimestamp()
     .setImage(ALLIANCE_BANNER_URL);
+  // applyTemplate é chamado ANTES do setImage final para que o banner hardcoded
+  // tenha sempre precedência sobre qualquer valor salvo no banco (imageUrl do template).
   applyTemplate(embed, 'alliance.official');
+  embed.setImage(ALLIANCE_BANNER_URL); // garante que o banner sempre aparece
   return embed;
 }
 
