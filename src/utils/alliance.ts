@@ -3,6 +3,9 @@ import { prisma } from '../database/client';
 import { COLORS } from './embeds';
 import { applyTemplate } from './embedTemplates';
 
+// URL permanente do banner da Aliança Skyline (asset no repositório)
+const ALLIANCE_BANNER_URL = 'https://raw.githubusercontent.com/KILLZINs/alianca-skyline-bot/main/assets/skyline-banner.jpg';
+
 // ─── Classes de servidor ──────────────────────────────────────────────────────
 
 export interface ServerClass {
@@ -96,7 +99,8 @@ export async function buildOfficialAllianceEmbed(client: Client): Promise<EmbedB
     })
     .setThumbnail(client.user?.displayAvatarURL() ?? null)
     .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
-    .setTimestamp();
+    .setTimestamp()
+    .setImage(ALLIANCE_BANNER_URL);
   applyTemplate(embed, 'alliance.official');
   return embed;
 }
