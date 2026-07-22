@@ -6,7 +6,6 @@ import {
   ButtonInteraction, ModalSubmitInteraction,
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
-  Attachment, TextChannel, Message,
 } from 'discord.js';
 import {
   EMBED_CATALOG, EMBED_CATEGORIES,
@@ -18,13 +17,13 @@ import { isBotManager } from '../utils/allowlist';
 
 // ──── Tipos dos campos configuráveis ────────────────────────────────────────────────────────────────────────────────────────
 const FIELD_META: Record<string, { label: string; emoji: string; placeholder: string; style: TextInputStyle; max: number }> = {
-  title:       { label: 'Título',          emoji: '📌', placeholder: 'Título do embed (máx 256 chars)', style: TextInputStyle.Short,     max: 256  },
-  description: { label: 'Descrição',       emoji: '📄', placeholder: 'Descrição / conteúdo principal...',  style: TextInputStyle.Paragraph, max: 4000 },
-  color:       { label: 'Cor (hex)',        emoji: '🎨', placeholder: '#9B59B6 (hex 6 dígitos)',          style: TextInputStyle.Short,     max: 7    },
-  thumbnailUrl:{ label: 'Thumbnail',        emoji: '🖼️', placeholder: 'Envie uma imagem pelo botão',       style: TextInputStyle.Short,     max: 512  },
-  imageUrl:    { label: 'Imagem',           emoji: '📸', placeholder: 'Envie uma imagem pelo botão',       style: TextInputStyle.Short,     max: 512  },
-  footerText:  { label: 'Texto do Rodapé', emoji: '📝', placeholder: '⚔️ Aliança Skyline',               style: TextInputStyle.Short,     max: 2048 },
-  footerIcon:  { label: 'Ícone do Rodapé', emoji: '🔗', placeholder: 'https://... (ícone URL)',           style: TextInputStyle.Short,     max: 512  },
+  title:       { label: 'Título',          emoji: '📌', placeholder: 'Título do embed (máx 256 chars)',         style: TextInputStyle.Short,     max: 256  },
+  description: { label: 'Descrição',       emoji: '📄', placeholder: 'Descrição / conteúdo principal...',       style: TextInputStyle.Paragraph, max: 4000 },
+  color:       { label: 'Cor (hex)',        emoji: '🎨', placeholder: '#9B59B6 (hex 6 dígitos)',                 style: TextInputStyle.Short,     max: 7    },
+  thumbnailUrl:{ label: 'Thumbnail',        emoji: '🖼️', placeholder: 'https://i.imgur.com/exemplo.png',         style: TextInputStyle.Short,     max: 512  },
+  imageUrl:    { label: 'Imagem',           emoji: '📸', placeholder: 'https://i.imgur.com/banner.png',          style: TextInputStyle.Short,     max: 512  },
+  footerText:  { label: 'Texto do Rodapé', emoji: '📝', placeholder: '⚔️ Aliança Skyline',                      style: TextInputStyle.Short,     max: 2048 },
+  footerIcon:  { label: 'Ícone do Rodapé', emoji: '🔗', placeholder: 'https://... (URL do ícone do rodapé)',    style: TextInputStyle.Short,     max: 512  },
 };
 const ALL_FIELDS = Object.keys(FIELD_META) as Array<keyof typeof FIELD_META>;
 
@@ -37,20 +36,20 @@ export function buildEmbedsHome(): { embed: EmbedBuilder; rows: ActionRowBuilder
     .setTitle('⚙️ Customização de Embeds')
     .setDescription(
       'Personalize **título, descrição, cor, imagens e rodapé** de cada embed do bot.\n\n' +
-      '📸 **Imagens:** Clique no botão de imagem e envie o arquivo diretamente no chat!\n\n' +
+      '🖼️ **Imagens e Thumbnail:** cole o URL direto (ex: `https://i.imgur.com/...`)\n\n' +
       'Selecione uma categoria para começar:'
     )
     .addFields(
-      { name: '🎯 Geral',        value: 'Boas-vindas, Level Up, Roleplay, Painel',       inline: true },
+      { name: '🎯 Geral',        value: 'Boas-vindas, Level Up, Roleplay, Painel',          inline: true },
       { name: '⚔️ RPG',          value: 'Vitória, Derrota, Empate, Level Up, Reencarnação', inline: true },
-      { name: '🐉 Boss Mundial',  value: 'Spawn, Derrota e Expiração do Boss Mundial',   inline: true },
-      { name: '💍 Casamento',     value: 'Proposta, Casamento e Divórcio',               inline: true },
-      { name: '📋 Missões',       value: 'Missão diária e semanal concluída',            inline: true },
-      { name: '🌐 Aliança',       value: 'Embed oficial da aliança',                     inline: true },
-      { name: '🎫 Tickets',       value: 'Ticket criado, fechado e assumido',            inline: true },
-      { name: '🎁 Sorteios',      value: 'Sorteio iniciado e anúncio de vencedor',       inline: true },
-      { name: '🔨 Moderação',     value: 'Aviso, ban e kick aplicados',                  inline: true },
-      { name: '🎭 Cargos',        value: 'Cargo adicionado e removido (self-role)',       inline: true },
+      { name: '🐉 Boss Mundial',  value: 'Spawn, Derrota e Expiração do Boss Mundial',       inline: true },
+      { name: '💍 Casamento',     value: 'Proposta, Casamento e Divórcio',                   inline: true },
+      { name: '📋 Missões',       value: 'Missão diária e semanal concluída',                inline: true },
+      { name: '🌐 Aliança',       value: 'Embed oficial da aliança',                         inline: true },
+      { name: '🎫 Tickets',       value: 'Ticket criado, fechado e assumido',                inline: true },
+      { name: '🎁 Sorteios',      value: 'Sorteio iniciado e anúncio de vencedor',           inline: true },
+      { name: '🔨 Moderação',     value: 'Aviso, ban e kick aplicados',                      inline: true },
+      { name: '🎭 Cargos',        value: 'Cargo adicionado e removido (self-role)',           inline: true },
     );
 
   const rows = [
@@ -117,7 +116,7 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
 
   const embed = baseEmbed(COLORS.WARNING)
     .setTitle('✏️ Editar: ' + (info?.label ?? key))
-    .setDescription('Personalize os campos do embed **' + (info?.label ?? key) + '**.\n\n📸 **Thumbnail e Imagem:** clique no botão e envie o arquivo diretamente — sem precisar de link!')
+    .setDescription('Personalize os campos do embed **' + (info?.label ?? key) + '**.\n\n🖼️ **Thumbnail e Imagem:** cole o URL direto no campo.')
     .addFields(
       ALL_FIELDS.map(field => {
         const meta  = FIELD_META[field];
@@ -126,7 +125,7 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
         if (field === 'color' && value) {
           display = intToHex(value as number);
         } else if ((field === 'imageUrl' || field === 'thumbnailUrl') && value) {
-          display = '✅ Imagem configurada';
+          display = '✅ ' + (value as string).slice(0, 60) + ((value as string).length > 60 ? '…' : '');
         } else {
           display = (value as string | null | undefined) ?? '*(padrão)*';
         }
@@ -134,10 +133,8 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
       })
     );
 
-  const imageFields = ['thumbnailUrl', 'imageUrl'] as const;
-
   const rows: ActionRowBuilder<ButtonBuilder>[] = [
-    // Linha 1: title, description, color (sempre modal)
+    // Linha 1: title, description, color
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       ALL_FIELDS.slice(0, 3).map(field =>
         new ButtonBuilder()
@@ -146,21 +143,15 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
           .setStyle(ButtonStyle.Secondary)
       )
     ),
-    // Linha 2: thumbnailUrl (upload), imageUrl (upload), footerText (modal), footerIcon (modal) + reset
+    // Linha 2: thumbnailUrl, imageUrl, footerText, footerIcon (todos via modal de URL/texto)
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       [
-        ...ALL_FIELDS.slice(3).map(field => {
-          if (field === 'thumbnailUrl' || field === 'imageUrl') {
-            return new ButtonBuilder()
-              .setCustomId('embeds:upload_image|' + key + '|' + field)
-              .setLabel(FIELD_META[field].emoji + ' ' + FIELD_META[field].label)
-              .setStyle(ButtonStyle.Primary);
-          }
-          return new ButtonBuilder()
+        ...ALL_FIELDS.slice(3).map(field =>
+          new ButtonBuilder()
             .setCustomId('embeds:field|' + key + '|' + field)
             .setLabel(FIELD_META[field].emoji + ' ' + FIELD_META[field].label)
-            .setStyle(ButtonStyle.Secondary);
-        }),
+            .setStyle(field === 'thumbnailUrl' || field === 'imageUrl' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+        ),
         new ButtonBuilder()
           .setCustomId('embeds:reset|' + key)
           .setLabel('🗑️ Resetar Tudo')
@@ -180,7 +171,7 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-// BUTTON HANDLER (raw — já é chamado com o interaction completo)
+// BUTTON HANDLER
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void> {
@@ -223,7 +214,6 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
       }
 
       case 'field': {
-        // Abrir modal para editar campo específico
         const [key, field] = rest;
         if (!EMBED_CATALOG[key] || !FIELD_META[field]) {
           await i.reply({ embeds: [errorEmbed('Inválido', 'Campo ou embed inválido.')], ephemeral: true });
@@ -231,7 +221,9 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
         }
         const meta = FIELD_META[field];
         const tpl  = getTemplate(key);
-        const current = field === 'color' && tpl?.color ? intToHex(tpl.color) : (tpl?.[field as keyof typeof tpl] ?? '') as string;
+        const current = field === 'color' && tpl?.color
+          ? intToHex(tpl.color)
+          : ((tpl?.[field as keyof typeof tpl] ?? '') as string);
 
         const modal = new ModalBuilder()
           .setCustomId('embedcfg:field|' + key + '|' + field)
@@ -250,18 +242,6 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
           );
 
         await i.showModal(modal);
-        break;
-      }
-
-      case 'upload_image': {
-        // Iniciar collector para upload de imagem ou thumbnail
-        const key   = rest[0];
-        const field = (rest[1] ?? 'imageUrl') as 'imageUrl' | 'thumbnailUrl';
-        if (!EMBED_CATALOG[key]) {
-          await i.reply({ embeds: [errorEmbed('Embed não encontrado', 'Chave `' + key + '` inválida.')] });
-          return;
-        }
-        await startImageUploadCollector(i, key, field);
         break;
       }
 
@@ -286,7 +266,7 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-// MODAL HANDLER (para submissão dos campos via texto)
+// MODAL HANDLER
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string): Promise<void> {
@@ -303,7 +283,6 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
     let rawValue = i.fields.getTextInputValue('value').trim();
 
     if (!rawValue) {
-      // Limpar campo
       await setTemplateField(key, field as any, null);
     } else if (field === 'color') {
       const colorInt = hexToInt(rawValue);
@@ -312,6 +291,13 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
         return;
       }
       await setTemplateField(key, 'color', colorInt);
+    } else if (field === 'imageUrl' || field === 'thumbnailUrl') {
+      // Valida se parece uma URL
+      if (!rawValue.startsWith('http://') && !rawValue.startsWith('https://')) {
+        await i.editReply({ embeds: [errorEmbed('URL inválida', 'O link deve começar com `https://`.')] });
+        return;
+      }
+      await setTemplateField(key, field as any, rawValue);
     } else {
       await setTemplateField(key, field as any, rawValue);
     }
@@ -319,98 +305,4 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
     const { embed, rows } = buildEditPanel(key);
     await i.editReply({ embeds: [successEmbed('✅ Salvo', 'Campo **' + (FIELD_META[field]?.label ?? field) + '** atualizado!'), embed], components: rows });
   }
-}
-
-// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-// COLLECTOR PARA UPLOAD DE IMAGENS (aguarda arquivo do usuário no chat)
-// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-
-export async function startImageUploadCollector(
-  i: ButtonInteraction,
-  key: string,
-  field: 'imageUrl' | 'thumbnailUrl' = 'imageUrl',
-): Promise<void> {
-  if (!await isBotManager(i.user.id)) {
-    await i.reply({ embeds: [errorEmbed('Sem permissão', 'Apenas gerenciadores do bot podem usar.')], ephemeral: true });
-    return;
-  }
-
-  const fieldLabel = field === 'thumbnailUrl' ? 'Thumbnail' : 'Imagem';
-
-  await i.reply({
-    embeds: [baseEmbed(COLORS.INFO)
-      .setTitle('📸 Upload de ' + fieldLabel)
-      .setDescription(
-        'Envie uma imagem como **arquivo anexado** nesta conversa.\n\n' +
-        '**⏱️ Você tem 2 minutos para enviar.**\n\n' +
-        '*Formatos aceitos: PNG, JPG, GIF, WebP*'
-      )],
-    ephemeral: true,
-  });
-
-  const channel = i.channel as TextChannel;
-  if (!channel || !('createMessageCollector' in channel)) {
-    await i.followUp({ embeds: [errorEmbed('Erro', 'Este canal não suporta upload.')], ephemeral: true });
-    return;
-  }
-
-  const filter = (msg: Message) => msg.author.id === i.user.id && msg.attachments.size > 0;
-  const collector = channel.createMessageCollector({ filter, time: 120000, max: 1 });
-
-  collector.on('collect', async (msg: Message) => {
-    try {
-      const attachment = msg.attachments.first() as Attachment | undefined;
-      if (!attachment) return;
-
-      // Validar se é imagem
-      const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-      if (!validTypes.includes(attachment.contentType ?? '')) {
-        await msg.reply({ embeds: [errorEmbed('Tipo inválido', 'Envie uma imagem (PNG, JPG, GIF, WebP).')] }).catch(() => null);
-        return;
-      }
-
-      // ── Correção: baixar os bytes ANTES de deletar a mensagem ───────────────
-      // URLs do CDN do Discord ficam permanentemente inválidas quando a mensagem
-      // que contém o attachment é deletada — mesmo o endpoint refresh-urls não
-      // consegue recuperá-las. A solução é baixar os bytes enquanto a mensagem
-      // ainda existe, reenviar como mensagem do próprio bot (cujo URL persiste
-      // enquanto essa mensagem existir) e só então salvar essa URL persistente.
-      const imgResponse = await fetch(attachment.url);
-      if (!imgResponse.ok) throw new Error(`Falha ao baixar imagem: ${imgResponse.status}`);
-      const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-      const imgName   = attachment.name ?? 'imagem.png';
-
-      // Deletar a mensagem original do usuário (UX limpo)
-      await msg.delete().catch(() => null);
-
-      // Re-enviar como mensagem do bot para obter URL controlada e persistente
-      const storageMsg = await channel.send({
-        files: [{ attachment: imgBuffer, name: imgName }],
-      });
-      const imageUrl = storageMsg.attachments.first()!.url;
-      // ────────────────────────────────────────────────────────────────────────
-
-      // Salvar a URL persistente no template
-      await setTemplateField(key, field as any, imageUrl);
-      const { embed, rows } = buildEditPanel(key);
-
-      await i.followUp({
-        embeds: [
-          successEmbed('✅ ' + fieldLabel + ' Salva!', fieldLabel + ' atualizada para o embed **' + (EMBED_CATALOG[key]?.label ?? key) + '**!'),
-          embed,
-        ],
-        components: rows,
-        ephemeral: true,
-      });
-    } catch (err) {
-      console.error('[Image Upload Error]', err);
-      await i.followUp({ embeds: [errorEmbed('Erro', 'Ocorreu um erro ao processar a imagem.')], ephemeral: true });
-    }
-  });
-
-  collector.on('end', (collected: any) => {
-    if (collected.size === 0) {
-      i.followUp({ embeds: [errorEmbed('⏰ Tempo expirado', 'Você não enviou nenhuma imagem a tempo.')], ephemeral: true }).catch(() => null);
-    }
-  });
 }
