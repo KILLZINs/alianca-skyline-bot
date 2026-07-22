@@ -51,6 +51,9 @@ exports.default = {
         // ─── Carregar allowlist + configs ─────────────────────────────────────────
         await Promise.all([(0, allowlist_1.loadAllowlist)(), (0, botConfig_1.loadBotConfig)(), (0, embedTemplates_1.loadEmbedTemplates)()]);
         console.log(`[botConfig] Configuração de embeds carregada.`);
+        // Refresh CDN URLs (expiram em ~24h)
+        await (0, embedTemplates_1.refreshImageUrls)(process.env.DISCORD_TOKEN ?? "").catch(console.error);
+        setInterval(() => (0, embedTemplates_1.refreshImageUrls)(process.env.DISCORD_TOKEN ?? "").catch(console.error), 12 * 60 * 60 * 1000);
         console.log(`[allowlist] Cache carregado. Enforcement: ${(0, allowlist_1.isEnforcementActive)() ? 'ATIVO' : 'inativo (lista vazia)'}`);
         // ─── Sair de servidores não autorizados ───────────────────────────────────
         if ((0, allowlist_1.isEnforcementActive)()) {

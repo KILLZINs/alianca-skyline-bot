@@ -134,4 +134,48 @@ function hexToInt(hex) {
 function intToHex(n) {
     return '#' + n.toString(16).padStart(6, '0').toUpperCase();
 }
+
+// ── Refresh de URLs do Discord CDN ───────────────────────────────────────────
+function isDiscordUrlExpiredSoon(url) {
+    try {
+        const match = url.match(/[?&]ex=([a-fA-F0-9]+)/);
+        if (!match) return false;
+        const expiryMs = parseInt(match[1], 16) * 1000;
+        return expiryMs < Date.now() + 12 * 60 * 60 * 1000;
+    } catch { return false; }
+}
+async function refreshImageUrls(botToken) {
+    const imageFields = ['imageUrl', 'thumbnailUrl', 'footerIcon'];
+    const urlToTargets = new Map();
+    for (const [key, tpl] of _cache.entries()) {
+        for (const field of imageFields) {
+            const url = tpl[field];
+            if (url && isDiscordUrlExpiredSoon(url)) {
+                const list = urlToTargets.get(url) ?? [];
+                list.push({ key, field });
+                urlToTargets.set(url, list);
+            }
+        }
+    }
+    if (urlToTargets.size === 0) return;
+    console.log('[EmbedTemplates] Refreshing ' + urlToTargets.size + ' CDN URL(s)...');
+    try {
+        const res = await fetch('https://discord.com/api/v10/attachments/refresh-urls', {
+            method: 'POST',
+            headers: { Authorization: 'Bot ' + botToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_urls: [...urlToTargets.keys()] }),
+        });
+        if (!res.ok) { console.warn('[EmbedTemplates] refresh-urls returned ' + res.status); return; }
+        const data = await res.json();
+        for (const { original, refreshed } of data.refreshed_urls) {
+            for (const { key, field } of urlToTargets.get(original) ?? []) {
+                await client_1.prisma.embedTemplate.update({ where: { key }, data: { [field]: refreshed } }).catch(() => null);
+                const cached = _cache.get(key);
+                if (cached) cached[field] = refreshed;
+            }
+        }
+        console.log('[EmbedTemplates] ' + data.refreshed_urls.length + ' URL(s) renovada(s).');
+    } catch (err) { console.error('[EmbedTemplates] Falha ao renovar URLs:', err); }
+}
+exports.refreshImageUrls = refreshImageUrls;
 //# sourceMappingURL=embedTemplates.js.map

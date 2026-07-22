@@ -150,3 +150,61 @@ export function hexToInt(hex: string): number | null {
 export function intToHex(n: number): string {
   return '#' + n.toString(16).padStart(6, '0').toUpperCase();
 }
+
+// ── Refresh de URLs do Discord CDN (expiram em ~24h) ─────────────────────────
+function isDiscordUrlExpiredSoon(url: string): boolean {
+  try {
+    const match = url.match(/[?&]ex=([a-fA-F0-9]+)/);
+    if (!match) return false;
+    const expiryMs = parseInt(match[1], 16) * 1000;
+    // Refresh se expira em menos de 12 horas
+    return expiryMs < Date.now() + 12 * 60 * 60 * 1000;
+  } catch { return false; }
+}
+
+/** Chame no evento ready e a cada 12h para manter as imagens dos templates válidas. */
+export async function refreshImageUrls(botToken: string): Promise<void> {
+  const imageFields: (keyof EmbedTemplateData)[] = ['imageUrl', 'thumbnailUrl', 'footerIcon'];
+
+  // Monta mapa url → [{key, field}] para as URLs que estão perto de expirar
+  const urlToTargets = new Map<string, { key: string; field: keyof EmbedTemplateData }[]>();
+  for (const [key, tpl] of _cache.entries()) {
+    for (const field of imageFields) {
+      const url = tpl[field] as string | null;
+      if (url && isDiscordUrlExpiredSoon(url)) {
+        const list = urlToTargets.get(url) ?? [];
+        list.push({ key, field });
+        urlToTargets.set(url, list);
+      }
+    }
+  }
+
+  if (urlToTargets.size === 0) return;
+  console.log(`[EmbedTemplates] Refreshing ${urlToTargets.size} CDN URL(s)...`);
+
+  try {
+    const res = await fetch('https://discord.com/api/v10/attachments/refresh-urls', {
+      method: 'POST',
+      headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attachment_urls: [...urlToTargets.keys()] }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[EmbedTemplates] refresh-urls returned ${res.status}`);
+      return;
+    }
+
+    const data = await res.json() as { refreshed_urls: { original: string; refreshed: string }[] };
+
+    for (const { original, refreshed } of data.refreshed_urls) {
+      for (const { key, field } of urlToTargets.get(original) ?? []) {
+        await prisma.embedTemplate.update({ where: { key }, data: { [field]: refreshed } }).catch(() => null);
+        const cached = _cache.get(key);
+        if (cached) (cached as any)[field] = refreshed;
+      }
+    }
+    console.log(`[EmbedTemplates] ${data.refreshed_urls.length} URL(s) renovada(s).`);
+  } catch (err) {
+    console.error('[EmbedTemplates] Falha ao renovar URLs:', err);
+  }
+}

@@ -4,7 +4,7 @@ import { prisma } from '../database/client';
 import { COLORS, EMOJIS } from '../utils/embeds';
 import { loadAllowlist, isEnforcementActive, isGuildAllowed, getOwnerIds } from '../utils/allowlist';
 import { loadBotConfig } from '../utils/botConfig';
-import { loadEmbedTemplates } from '../utils/embedTemplates';
+import { loadEmbedTemplates, refreshImageUrls } from '../utils/embedTemplates';
 
 export default {
   name: 'ready',
@@ -15,6 +15,13 @@ export default {
     // ─── Carregar allowlist + configs ─────────────────────────────────────────
     await Promise.all([loadAllowlist(), loadBotConfig(), loadEmbedTemplates()]);
     console.log(`[botConfig] Configuração de embeds carregada.`);
+
+    // ─── Refresh de URLs CDN do Discord (expiram em ~24h) ──────────────────────
+    await refreshImageUrls(process.env.DISCORD_TOKEN ?? '').catch(console.error);
+    setInterval(
+      () => refreshImageUrls(process.env.DISCORD_TOKEN ?? '').catch(console.error),
+      12 * 60 * 60 * 1000, // 12 horas
+    );
     console.log(`[allowlist] Cache carregado. Enforcement: ${isEnforcementActive() ? 'ATIVO' : 'inativo (lista vazia)'}`);
 
     // ─── Sair de servidores não autorizados ───────────────────────────────────
