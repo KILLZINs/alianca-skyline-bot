@@ -7,6 +7,9 @@ export interface BotConfigData {
   primaryColor: number;
   botIconUrl:   string | null;
   rpFooterText: string;
+  // Feature toggles globais
+  featAfk:       boolean;
+  featWelcomeDm: boolean;
 }
 
 // ─── Padrões ──────────────────────────────────────────────────────────────────
@@ -16,6 +19,8 @@ export const CONFIG_DEFAULTS: BotConfigData = {
   primaryColor: 0x9b59b6,
   botIconUrl:   null,
   rpFooterText: '⚔️ Aliança Skyline • /genero para mudar seus pronomes',
+  featAfk:       true,
+  featWelcomeDm: true,
 };
 
 // ─── Cache em memória (carregado no ready) ────────────────────────────────────
@@ -35,6 +40,8 @@ export async function loadBotConfig(): Promise<void> {
         primaryColor: row.primaryColor,
         botIconUrl:   row.botIconUrl,
         rpFooterText: row.rpFooterText,
+        featAfk:       (row as any).featAfk       ?? true,
+        featWelcomeDm: (row as any).featWelcomeDm ?? true,
       };
     } else {
       _cache = { ...CONFIG_DEFAULTS };

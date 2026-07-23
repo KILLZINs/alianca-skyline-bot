@@ -691,6 +691,9 @@ model BotConfig {
   primaryColor Int      @default(10180278)
   botIconUrl   String?
   rpFooterText String   @default("⚔️ Aliança Skyline • /genero para mudar seus pronomes")
+  // ─── Feature toggles globais (só OWNER pode alterar) ──────────────────────
+  featAfk       Boolean  @default(true)
+  featWelcomeDm Boolean  @default(true)
   updatedAt    DateTime @updatedAt @default(now())
 
   @@map("bot_config")

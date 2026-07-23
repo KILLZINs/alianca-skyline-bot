@@ -1,6 +1,7 @@
 import { GuildMember, TextChannel, EmbedBuilder } from 'discord.js';
 import { getOrCreateMember, getConfig } from '../utils/helpers';
 import { COLORS, EMOJIS } from '../utils/embeds';
+import { getBotConfig } from '../utils/botConfig';
 import { prisma } from '../database/client';
 import { isAllianceServer, buildOfficialAllianceEmbed } from '../utils/alliance';
 import { applyTemplate } from '../utils/embedTemplates';
@@ -27,7 +28,7 @@ export default {
     const blacklisted = await prisma.allianceBlacklist.findUnique({ where: { userId: member.id } }).catch(() => null);
     if (blacklisted) {
       await member.ban({ reason: `[Blacklist Aliança] ${blacklisted.reason ?? 'Sem motivo'}` }).catch(console.error);
-      return; // Não continuar com boas-vindas
+      return;
     }
 
     const config = await getConfig(guildId);
@@ -75,7 +76,10 @@ export default {
       }
     }
 
-    // ─── DM com embed oficial da aliança (obrigatório para servidores da aliança) ──
+    // ─── DM com embed oficial da aliança ──────────────────────────────────────
+    // Controlado pelo painel de features do bot (/botpanel → DM Boas-vindas)
+    if (!getBotConfig().featWelcomeDm) return;
+
     const inAlliance = await isAllianceServer(guildId).catch(() => false);
     if (!inAlliance) return;
 
@@ -94,7 +98,7 @@ export default {
         .setTimestamp();
 
       applyTemplate(dmEmbed, 'welcome.dm');
-      await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null); // DMs podem estar fechadas
+      await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null);
     } catch { /* silently ignore DM errors */ }
   },
 };

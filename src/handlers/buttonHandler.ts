@@ -37,6 +37,7 @@ export async function handleButton(interaction: ButtonInteraction) {
       case 'economia': return await economiaButtons(interaction, action);
       case 'rpg':      return await (await import('./../rpg/handlers/rpgButtonHandler')).handleRpgButton(interaction, action);
       case 'rpgwipe':  return await rpgwipeButtons(interaction, action);
+      case 'botpanel':  return await botpanelButtons(interaction, action);
       case 'alianca':   return await (await import('./allianceHandler')).handleAliancaButton(interaction, action);
       case 'servidor':  return await (await import('./allianceHandler')).handleServidorButton(interaction, action);
       case 'embedcfg':  return await (await import('./configHandler')).handleEmbedCfgButton(interaction, action);
@@ -1218,6 +1219,31 @@ function missionLabel(type: string): string {
     estar_online: '🟢 Login diário',
   };
   return map[type] ?? type;
+}
+
+// ─── BOTPANEL ─────────────────────────────────────────────────────────────────
+
+async function botpanelButtons(i: ButtonInteraction, action: string) {
+  const { isBotOwner } = await import('../utils/allowlist');
+  if (!isBotOwner(i.user.id)) {
+    return i.reply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem usar este painel.')], ephemeral: true });
+  }
+
+  const { getBotConfig, updateBotConfig } = await import('../utils/botConfig');
+  const { buildBotPanelEmbed, buildBotPanelRow } = await import('../commands/botpanel');
+
+  await i.deferReply({ ephemeral: true });
+
+  if (action === 'toggle_afk') {
+    const current = getBotConfig().featAfk;
+    await updateBotConfig({ featAfk: !current });
+  } else if (action === 'toggle_welcomedm') {
+    const current = getBotConfig().featWelcomeDm;
+    await updateBotConfig({ featWelcomeDm: !current });
+  }
+  // 'refresh' apenas atualiza o painel sem alterar nada
+
+  return i.editReply({ embeds: [buildBotPanelEmbed()], components: [buildBotPanelRow()] });
 }
 
 // ── /rpgwipe confirmation buttons ────────────────────────────────────────────

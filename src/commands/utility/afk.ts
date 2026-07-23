@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../../types';
 import { successEmbed, errorEmbed } from '../../utils/embeds';
+import { getBotConfig } from '../../utils/botConfig';
 import { prisma } from '../../database/client';
 
 export default {
@@ -16,6 +17,13 @@ export default {
         .setMaxLength(200),
     ),
   async execute(interaction: ChatInputCommandInteraction) {
+    if (!getBotConfig().featAfk) {
+      return interaction.reply({
+        embeds: [errorEmbed('Desativado', 'O sistema AFK está desativado no momento.')],
+        ephemeral: true,
+      });
+    }
+
     const motivo = interaction.options.getString('motivo') ?? 'Ausente';
     const userId = interaction.user.id;
 
