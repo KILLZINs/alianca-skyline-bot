@@ -733,3 +733,12 @@ model SelfRoleEntry {
 
   @@map("self_role_entries")
 }
+
+model AfkStatus {
+  id      String   @id @default(cuid())
+  userId  String   @unique
+  message String   @default("Ausente")
+  setAt   DateTime @default(now())
+
+  @@map("afk_status")
+}

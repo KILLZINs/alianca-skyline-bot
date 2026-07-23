@@ -29,6 +29,36 @@ export default {
     const authorId = message.author.id;
     const config   = await getConfig(guildId);
 
+    // ─── AFK: remover status do autor ao enviar mensagem ─────────────────────
+    const authorAfk = await prisma.afkStatus.findUnique({ where: { userId: authorId } }).catch(() => null);
+    if (authorAfk) {
+      await prisma.afkStatus.delete({ where: { userId: authorId } }).catch(() => null);
+      const notify = await (message.channel as TextChannel)
+        .send({ content: `👋 ${message.author}, seu AFK foi removido!` }).catch(() => null);
+      if (notify) setTimeout(() => notify.delete().catch(() => null), 5000);
+    }
+
+    // ─── AFK: notificar ao mencionar usuário em AFK ───────────────────────────
+    if (message.mentions.users.size > 0) {
+      for (const [, mentionedUser] of message.mentions.users) {
+        if (mentionedUser.bot || mentionedUser.id === authorId) continue;
+        const afk = await prisma.afkStatus.findUnique({ where: { userId: mentionedUser.id } }).catch(() => null);
+        if (!afk) continue;
+
+        const since = Math.floor(afk.setAt.getTime() / 1000);
+        const warn = await (message.channel as TextChannel).send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(COLORS.WARNING)
+              .setTitle(`💤 ${mentionedUser.username} está em AFK`)
+              .setDescription(`**Motivo:** ${afk.message}\n**Desde:** <t:${since}:R>`)
+              .setFooter({ text: '⚔️ Aliança Skyline' }),
+          ],
+        }).catch(() => null);
+        if (warn) setTimeout(() => warn.delete().catch(() => null), 8000);
+      }
+    }
+
     // ─── Track daily message count ────────────────────────────────────────────
     prisma.serverStat.upsert({
       where:  { guildId_date: { guildId, date: today() } },
