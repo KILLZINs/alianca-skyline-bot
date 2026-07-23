@@ -441,21 +441,25 @@ async function adminButtons(i: ButtonInteraction, action: string) {
 
   if (action === 'stats') {
     await i.deferReply({ ephemeral: true });
-    const [totalMembers, totalWins, totalTickets, totalAchievements, topMember] = await Promise.all([
-      prisma.member.count(),
+    // Membros do guild (bots excluídos do count de humanos)
+    const memberIds = [...guild.members.cache.filter(m => !m.user.bot).keys()];
+    const [totalGiveaways, totalTickets, totalAchievements, topMember] = await Promise.all([
       prisma.giveaway.count({ where: { guildId: guild.id } }),
-      prisma.ticket.count(),
-      prisma.achievement.count(),
-      prisma.member.findFirst({ orderBy: [{ level: 'desc' }, { xp: 'desc' }] }),
+      prisma.ticket.count({ where: { authorId: { in: memberIds } } }),
+      prisma.achievement.count({ where: { memberId: { in: memberIds } } }),
+      prisma.member.findFirst({
+        where: { discordId: { in: memberIds } },
+        orderBy: [{ level: 'desc' }, { xp: 'desc' }],
+      }),
     ]);
     const embed = baseEmbed(COLORS.GOLD)
       .setTitle(`📈 Estatísticas — ${guild.name}`)
       .addFields(
-        { name: '👥 Membros cadastrados', value: `**${totalMembers}**`, inline: true },
-        { name: '🎁 Sorteios realizados', value: `**${totalWins}**`, inline: true },
-        { name: '🎫 Tickets abertos', value: `**${totalTickets}**`, inline: true },
+        { name: '👥 Membros no servidor', value: `**${guild.memberCount}** (${memberIds.length} humanos)`, inline: true },
+        { name: '🎁 Sorteios realizados', value: `**${totalGiveaways}**`, inline: true },
+        { name: '🎫 Tickets abertos',     value: `**${totalTickets}**`, inline: true },
         { name: '🏅 Conquistas concedidas', value: `**${totalAchievements}**`, inline: true },
-        { name: '🏆 Membro #1', value: topMember ? `**${topMember.username}** (Nv ${topMember.level})` : 'N/A', inline: true },
+        { name: '🏆 Membro #1',           value: topMember ? `**${topMember.username}** (Nv ${topMember.level})` : 'N/A', inline: true },
       );
     return i.editReply({ embeds: [embed] });
   }
@@ -513,8 +517,8 @@ async function adminButtons(i: ButtonInteraction, action: string) {
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('acao').setLabel('Ação: "criar" ou "dar"').setStyle(TextInputStyle.Short).setRequired(true)),
       new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('nome').setLabel('Nome da conquista').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição (ao criar) ou ID do usuário (ao dar)').setStyle(TextInputStyle.Short).setRequired(true)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('recompensa').setLabel('XP,Moedas de recompensa (ao criar, ex: 100,50)').setStyle(TextInputStyle.Short).setRequired(false)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição / ID do usuário (ao dar)').setStyle(TextInputStyle.Short).setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('recompensa').setLabel('Recompensa XP,Moedas (ex: 100,50)').setStyle(TextInputStyle.Short).setRequired(false)),
     );
     return i.showModal(modal);
   }
@@ -556,7 +560,7 @@ async function adminButtons(i: ButtonInteraction, action: string) {
     const modal = new ModalBuilder().setCustomId('modal:rank').setTitle('Definir Rank');
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('usuario').setLabel('ID ou @menção do usuário').setStyle(TextInputStyle.Short).setRequired(true)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('rank').setLabel(`Rank: ${RANKS.join(', ')}`).setStyle(TextInputStyle.Short).setRequired(true)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('rank').setLabel('Rank (Recruta, Membro, Veterano, Elite…)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder(RANKS.join(', '))),
     );
     return i.showModal(modal);
   }
@@ -806,7 +810,7 @@ async function configButtons(i: ButtonInteraction, action: string, extra: string
     const modal = new ModalBuilder().setCustomId('modal:config:welcome').setTitle('Mensagem de Boas-vindas');
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder().setCustomId('mensagem').setLabel('Mensagem ({user} = menção, {server} = servidor)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(config.welcomeMessage ?? 'Bem-vindo(a) {user} à {server}!').setMaxLength(500)
+        new TextInputBuilder().setCustomId('mensagem').setLabel('Mensagem ({user} = menção, {server} = nome)').setStyle(TextInputStyle.Paragraph).setRequired(false).setPlaceholder(config.welcomeMessage ?? 'Bem-vindo(a) {user} à {server}!').setMaxLength(500)
       ),
     );
     return i.showModal(modal);
