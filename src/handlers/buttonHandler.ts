@@ -11,7 +11,7 @@ import { FEATURE_META, FEATURE_KEYS, type FeatureKey } from '../utils/features';
 import { xpForNextLevel, RANKS } from '../types';
 import { checkAdmin, checkModerator } from '../utils/permissions';
 import { ensureDailyMissions } from '../commands/utility/missoes';
-import { isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
+import { isBotOwner, isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
 import { applyTemplate } from '../utils/embedTemplates';
 
 export async function handleButton(interaction: ButtonInteraction) {
