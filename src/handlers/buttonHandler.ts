@@ -1224,25 +1224,25 @@ function missionLabel(type: string): string {
 // ─── BOTPANEL ─────────────────────────────────────────────────────────────────
 
 async function botpanelButtons(i: ButtonInteraction, action: string) {
-  const { isBotOwner } = await import('../utils/allowlist');
+  // Verificação de permissão sem imports pesados
   if (!isBotOwner(i.user.id)) {
     return i.reply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem usar este painel.')], ephemeral: true });
   }
 
-  const { getBotConfig, updateBotConfig } = await import('../utils/botConfig');
+  // deferUpdate ANTES de qualquer await pesado — garante resposta dentro de 3s
+  await i.deferUpdate();
+
+  const { updateBotConfig, getBotConfig } = await import('../utils/botConfig');
   const { buildBotPanelEmbed, buildBotPanelRow } = await import('../commands/botpanel');
 
-  await i.deferReply({ ephemeral: true });
-
   if (action === 'toggle_afk') {
-    const current = getBotConfig().featAfk;
-    await updateBotConfig({ featAfk: !current });
+    await updateBotConfig({ featAfk: !getBotConfig().featAfk });
   } else if (action === 'toggle_welcomedm') {
-    const current = getBotConfig().featWelcomeDm;
-    await updateBotConfig({ featWelcomeDm: !current });
+    await updateBotConfig({ featWelcomeDm: !getBotConfig().featWelcomeDm });
   }
-  // 'refresh' apenas atualiza o painel sem alterar nada
+  // 'refresh' apenas re-renderiza o painel sem alterar nada
 
+  // Edita a mensagem original do painel no lugar (sem nova mensagem)
   return i.editReply({ embeds: [buildBotPanelEmbed()], components: [buildBotPanelRow()] });
 }
 
