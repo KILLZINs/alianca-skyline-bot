@@ -226,7 +226,7 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
           : ((tpl?.[field as keyof typeof tpl] ?? '') as string);
 
         const modal = new ModalBuilder()
-          .setCustomId('embedcfg:field|' + key + '|' + field)
+          .setCustomId('embeds_modal:field|' + key + '|' + field)
           .setTitle(meta.emoji + ' Editar ' + meta.label)
           .addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(
