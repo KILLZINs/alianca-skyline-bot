@@ -1,36 +1,41 @@
 import { Message, EmbedBuilder } from 'discord.js';
     import { COLORS } from '../utils/embeds';
+    import { ExtendedClient } from '../types';
 
     export default {
     name: 'ajuda',
-    description: 'Lista os comandos de prefix disponíveis',
+    description: 'Lista os comandos disponíveis via prefix',
     async execute(message: Message, _args: string[]) {
+      const extClient = message.client as ExtendedClient;
+
+      // Coleta os nomes de todos os slash commands registrados
+      const slashCmds = [...(extClient.commands?.keys() ?? [])].sort();
+
       const embed = new EmbedBuilder()
-        .setColor(COLORS.PRIMARY ?? 0x5865F2)
+        .setColor(COLORS.PRIMARY)
         .setTitle('📖 Comandos — Aliança Skyline')
-        .setDescription('Use o prefix **b** seguido de espaço e o comando.\nEx: `b ping`')
+        .setDescription(
+          'Use **b** + espaço + nome do comando.\n' +
+          'Todos os slash commands também funcionam com prefix!\n' +
+          'Ex: `b perfil`, `b servidor`, `b ping`'
+        )
         .addFields(
           {
-            name: '🤖 Comandos de Prefix (b)',
-            value: [
-              '`b ping`  — Latência do bot',
-              '`b ajuda` — Esta lista de comandos',
-              '`b info`  — Informações sobre o bot',
-            ].join('\n'),
+            name: '⚡ Slash Commands disponíveis via prefix',
+            value: slashCmds.length
+              ? slashCmds.map(n => `\`${n}\``).join('  ')
+              : 'Nenhum comando registrado ainda.',
           },
           {
             name: '🧠 Bryan (I.A.)',
             value:
-              'Mencione **Bryan** no início da mensagem para falar com a I.A.\n' +
+              'Comece a mensagem com **Bryan** para falar com a I.A.\n' +
               'Ex: `Bryan, como entrar na aliança?`',
-          },
-          {
-            name: '⚡ Slash Commands',
-            value: 'Digite `/` para ver todos os comandos slash disponíveis.',
           },
         )
         .setFooter({ text: '⚔️ Aliança Skyline' })
         .setTimestamp();
+
       await message.reply({ embeds: [embed] });
     },
     };

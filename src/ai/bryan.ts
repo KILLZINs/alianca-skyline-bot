@@ -1,56 +1,51 @@
-import OpenAI from 'openai';
-
-    let openaiClient: OpenAI | null = null;
-
-    function getOpenAI(): OpenAI {
-    if (!openaiClient) {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
-      openaiClient = new OpenAI({ apiKey });
-    }
-    return openaiClient;
-    }
-
-    /**
-    * Pergunta ao Bryan (ChatGPT) e retorna a resposta como string.
-    * @param userMessage  Mensagem do usuario (sem o "Bryan, " do inicio)
-    * @param username     Display name do usuario que chamou o Bryan
-    */
+// Bryan I.A. — usa fetch nativo para chamar a OpenAI API (sem depender do pacote openai)
     export async function askBryan(userMessage: string, username: string): Promise<string> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return '🔑 Chave da OpenAI não configurada. Peça a um admin do bot para adicionar OPENAI_API_KEY nas variáveis de ambiente!';
+    }
+
     try {
-      const openai = getOpenAI();
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Voce e Bryan, o assistente inteligente e animado da Alianca Skyline — ' +
-              'uma alianca de servidores do Discord cujo objetivo e unir comunidades para crescerem juntas. ' +
-              'Voce ajuda membros com duvidas sobre a alianca, o bot e o Discord em geral. ' +
-              'Fale sempre em portugues do Brasil. Use linguagem jovem e descontraida (girias leves sao ok). ' +
-              'Seja conciso: maximo de 400 palavras por resposta. Nao use markdown excessivo. ' +
-              `O usuario que esta falando com voce se chama ${username}.`,
-          },
-          {
-            role: 'user',
-            content: userMessage,
-          },
-        ],
-        max_tokens: 500,
-        temperature: 0.8,
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Você é Bryan, o assistente inteligente e animado da Aliança Skyline — ' +
+                'uma aliança de servidores do Discord cujo objetivo é unir comunidades para crescerem juntas. ' +
+                'Você ajuda membros com dúvidas sobre a aliança, o bot e o Discord em geral. ' +
+                'Fale sempre em português do Brasil. Use linguagem jovem e descontraída (gírias leves são ok). ' +
+                'Seja conciso: máximo de 400 palavras por resposta. Não use markdown excessivo. ' +
+                `O usuário que está falando com você se chama ${username}.`,
+            },
+            {
+              role: 'user',
+              content: userMessage,
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.8,
+        }),
       });
 
-      return (
-        completion.choices[0]?.message?.content?.trim() ??
-        'Eita, nao consegui processar sua mensagem agora. Tenta de novo!'
-      );
-    } catch (err: unknown) {
-      const e = err as { status?: number; message?: string };
-      if (e?.status === 429)
-        return '⏳ Estou sobrecarregado agora! Tenta novamente em alguns segundos.';
-      if (e?.status === 401)
-        return '🔑 Chave da API nao configurada corretamente. Avise um admin do bot!';
+      if (res.status === 429) return '⏳ Estou sobrecarregado agora! Tenta novamente em alguns segundos.';
+      if (res.status === 401) return '🔑 Chave da API inválida. Avise um admin do bot!';
+
+      if (!res.ok) {
+        console.error('[Bryan IA] HTTP', res.status);
+        return '❌ Erro ao contactar a IA. Tenta novamente!';
+      }
+
+      const data = await res.json() as { choices: { message: { content: string } }[] };
+      return data.choices[0]?.message?.content?.trim() ?? 'Eita, não recebi resposta. Tenta de novo!';
+    } catch (err) {
       console.error('[Bryan IA] Erro:', err);
       return '❌ Ocorreu um erro ao processar sua mensagem. Tenta novamente!';
     }

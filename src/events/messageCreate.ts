@@ -96,24 +96,45 @@ import { Message, TextChannel, EmbedBuilder, GuildMember } from 'discord.js';
       }
 
       // ─── Prefix commands ─────────────────────────────────────────────────────
-      // Ativado quando a mensagem começa com "b " (ex: "b ping", "b ajuda")
-      if (content.toLowerCase().startsWith(PREFIX)) {
-        const args    = content.slice(PREFIX.length).trim().split(/\s+/);
-        const cmdName = args.shift()?.toLowerCase() ?? '';
-        if (!cmdName) return;
+        // "b <comando>" roteia para prefix-only OU slash commands existentes
+        if (content.toLowerCase().startsWith(PREFIX)) {
+          const args    = content.slice(PREFIX.length).trim().split(/\s+/);
+          const cmdName = args.shift()?.toLowerCase() ?? '';
+          if (!cmdName) return;
 
-        const extClient = message.client as ExtendedClient;
-        const cmd = extClient.prefixCommands?.get(cmdName);
-        if (!cmd) return;
+          const extClient = message.client as ExtendedClient;
 
-        try {
-          await cmd.execute(message, args);
-        } catch (err) {
-          console.error(`[Prefix] Erro no comando ${cmdName}:`, err);
-          await message.reply('❌ Erro ao executar esse comando.').catch(() => null);
+          // 1. Comandos prefix exclusivos (b ajuda, b info, etc.)
+          const prefixCmd = extClient.prefixCommands?.get(cmdName);
+          if (prefixCmd) {
+            try { await prefixCmd.execute(message, args); }
+            catch (err) {
+              console.error(`[Prefix] Erro em ${cmdName}:`, err);
+              await message.reply('❌ Erro ao executar esse comando.').catch(() => null);
+            }
+            return;
+          }
+
+          // 2. Slash commands existentes via shim
+          const slashCmd = extClient.commands?.get(cmdName);
+          if (slashCmd) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { createMessageShim } = require('../utils/messageCommandShim');
+              const shim = createMessageShim(message, cmdName, args);
+              await slashCmd.execute(shim);
+            } catch (err) {
+              console.error(`[Prefix→Slash] Erro em ${cmdName}:`, err);
+              await message.reply('❌ Erro ao executar esse comando.').catch(() => null);
+            }
+            return;
+          }
+
+          await message.reply(
+            `❌ Comando \`${cmdName}\` não encontrado. Use \`b ajuda\` para ver os disponíveis.`
+          ).catch(() => null);
+          return;
         }
-        return;
-      }
 
       // Não processar mais nada para mensagens de slash command ou DMs
       if (message.content.startsWith('/')) return;
