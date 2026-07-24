@@ -53,13 +53,14 @@ export async function loadBotConfig(): Promise<void> {
 }
 
 export async function updateBotConfig(data: Partial<BotConfigData>): Promise<BotConfigData> {
-  const next = { ..._cache, ...data };
+  // Atualiza o cache IMEDIATAMENTE (optimistic) antes do await do DB
+  _cache = { ..._cache, ...data };
+  const snapshot = { ..._cache };
   await prisma.botConfig.upsert({
     where:  { id: 'global' },
     update: data as any,
-    create: { id: 'global', ...next },
+    create: { id: 'global', ...snapshot },
   });
-  _cache = next;
   return _cache;
 }
 

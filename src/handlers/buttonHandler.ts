@@ -13,6 +13,8 @@ import { checkAdmin, checkModerator } from '../utils/permissions';
 import { ensureDailyMissions } from '../commands/utility/missoes';
 import { isBotOwner, isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
 import { applyTemplate } from '../utils/embedTemplates';
+import { getBotConfig, updateBotConfig } from '../utils/botConfig';
+import { buildBotPanelEmbed, buildBotPanelRow } from '../commands/botpanel';
 
 export async function handleButton(interaction: ButtonInteraction) {
   const parts = interaction.customId.split(':');
@@ -1224,26 +1226,20 @@ function missionLabel(type: string): string {
 // ─── BOTPANEL ─────────────────────────────────────────────────────────────────
 
 async function botpanelButtons(i: ButtonInteraction, action: string) {
-  // Verificação de permissão sem imports pesados
   if (!isBotOwner(i.user.id)) {
     return i.reply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem usar este painel.')], ephemeral: true });
   }
 
-  // deferUpdate ANTES de qualquer await pesado — garante resposta dentro de 3s
-  await i.deferUpdate();
-
-  const { updateBotConfig, getBotConfig } = await import('../utils/botConfig');
-  const { buildBotPanelEmbed, buildBotPanelRow } = await import('../commands/botpanel');
-
+  // Aplica toggle no cache de memória IMEDIATAMENTE (síncrono)
+  // e dispara o DB em background — garante que i.update() rode <1ms depois
   if (action === 'toggle_afk') {
-    await updateBotConfig({ featAfk: !getBotConfig().featAfk });
+    updateBotConfig({ featAfk: !getBotConfig().featAfk }).catch(console.error);
   } else if (action === 'toggle_welcomedm') {
-    await updateBotConfig({ featWelcomeDm: !getBotConfig().featWelcomeDm });
+    updateBotConfig({ featWelcomeDm: !getBotConfig().featWelcomeDm }).catch(console.error);
   }
-  // 'refresh' apenas re-renderiza o painel sem alterar nada
 
-  // Edita a mensagem original do painel no lugar (sem nova mensagem)
-  return i.editReply({ embeds: [buildBotPanelEmbed()], components: [buildBotPanelRow()] });
+  // i.update() é chamado sem nenhum await antes — responde dentro de ms
+  return i.update({ embeds: [buildBotPanelEmbed()], components: [buildBotPanelRow()] });
 }
 
 // ── /rpgwipe confirmation buttons ────────────────────────────────────────────
