@@ -13,6 +13,8 @@ exports.CONFIG_DEFAULTS = {
     primaryColor: 0x9b59b6,
     botIconUrl: null,
     rpFooterText: '⚔️ Aliança Skyline • /genero para mudar seus pronomes',
+    featAfk: true,
+    featWelcomeDm: true,
 };
 // ─── Cache em memória (carregado no ready) ────────────────────────────────────
 let _cache = { ...exports.CONFIG_DEFAULTS };
@@ -28,6 +30,8 @@ async function loadBotConfig() {
                 primaryColor: row.primaryColor,
                 botIconUrl: row.botIconUrl,
                 rpFooterText: row.rpFooterText,
+                featAfk: row.featAfk ?? true,
+                featWelcomeDm: row.featWelcomeDm ?? true,
             };
         }
         else {
@@ -40,13 +44,14 @@ async function loadBotConfig() {
     }
 }
 async function updateBotConfig(data) {
-    const next = { ..._cache, ...data };
+    // Atualiza o cache IMEDIATAMENTE (optimistic) antes do await do DB
+    _cache = { ..._cache, ...data };
+    const snapshot = { ..._cache };
     await client_1.prisma.botConfig.upsert({
         where: { id: 'global' },
         update: data,
-        create: { id: 'global', ...next },
+        create: { id: 'global', ...snapshot },
     });
-    _cache = next;
     return _cache;
 }
 // ─── Helpers ─────────────────────────────────────────────────────────────────

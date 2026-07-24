@@ -44,6 +44,7 @@ const permissions_1 = require("../utils/permissions");
 const missoes_1 = require("../commands/utility/missoes");
 const allowlist_1 = require("../utils/allowlist");
 const embedTemplates_1 = require("../utils/embedTemplates");
+const botConfig_1 = require("../utils/botConfig");
 async function handleButton(interaction) {
     const parts = interaction.customId.split(':');
     const prefix = parts[0];
@@ -66,6 +67,7 @@ async function handleButton(interaction) {
             case 'economia': return await economiaButtons(interaction, action);
             case 'rpg': return await (await Promise.resolve().then(() => __importStar(require('./../rpg/handlers/rpgButtonHandler')))).handleRpgButton(interaction, action);
             case 'rpgwipe': return await rpgwipeButtons(interaction, action);
+            case 'botpanel': return await botpanelButtons(interaction, action);
             case 'alianca': return await (await Promise.resolve().then(() => __importStar(require('./allianceHandler')))).handleAliancaButton(interaction, action);
             case 'servidor': return await (await Promise.resolve().then(() => __importStar(require('./allianceHandler')))).handleServidorButton(interaction, action);
             case 'embedcfg': return await (await Promise.resolve().then(() => __importStar(require('./configHandler')))).handleEmbedCfgButton(interaction, action);
@@ -360,16 +362,20 @@ async function adminButtons(i, action) {
     }
     if (action === 'stats') {
         await i.deferReply({ ephemeral: true });
-        const [totalMembers, totalWins, totalTickets, totalAchievements, topMember] = await Promise.all([
-            client_1.prisma.member.count(),
+        // Membros do guild (bots excluídos do count de humanos)
+        const memberIds = [...guild.members.cache.filter(m => !m.user.bot).keys()];
+        const [totalGiveaways, totalTickets, totalAchievements, topMember] = await Promise.all([
             client_1.prisma.giveaway.count({ where: { guildId: guild.id } }),
-            client_1.prisma.ticket.count(),
-            client_1.prisma.achievement.count(),
-            client_1.prisma.member.findFirst({ orderBy: [{ level: 'desc' }, { xp: 'desc' }] }),
+            client_1.prisma.ticket.count({ where: { authorId: { in: memberIds } } }),
+            client_1.prisma.achievement.count({ where: { memberId: { in: memberIds } } }),
+            client_1.prisma.member.findFirst({
+                where: { discordId: { in: memberIds } },
+                orderBy: [{ level: 'desc' }, { xp: 'desc' }],
+            }),
         ]);
         const embed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.GOLD)
             .setTitle(`📈 Estatísticas — ${guild.name}`)
-            .addFields({ name: '👥 Membros cadastrados', value: `**${totalMembers}**`, inline: true }, { name: '🎁 Sorteios realizados', value: `**${totalWins}**`, inline: true }, { name: '🎫 Tickets abertos', value: `**${totalTickets}**`, inline: true }, { name: '🏅 Conquistas concedidas', value: `**${totalAchievements}**`, inline: true }, { name: '🏆 Membro #1', value: topMember ? `**${topMember.username}** (Nv ${topMember.level})` : 'N/A', inline: true });
+            .addFields({ name: '👥 Membros no servidor', value: `**${guild.memberCount}** (${memberIds.length} humanos)`, inline: true }, { name: '🎁 Sorteios realizados', value: `**${totalGiveaways}**`, inline: true }, { name: '🎫 Tickets abertos', value: `**${totalTickets}**`, inline: true }, { name: '🏅 Conquistas concedidas', value: `**${totalAchievements}**`, inline: true }, { name: '🏆 Membro #1', value: topMember ? `**${topMember.username}** (Nv ${topMember.level})` : 'N/A', inline: true });
         return i.editReply({ embeds: [embed] });
     }
     if (action === 'anuncio') {
@@ -399,7 +405,7 @@ async function adminButtons(i, action) {
     }
     if (action === 'conquista') {
         const modal = new discord_js_1.ModalBuilder().setCustomId('modal:conquista').setTitle('Gerenciar Conquistas');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('acao').setLabel('Ação: "criar" ou "dar"').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('nome').setLabel('Nome da conquista').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true).setMaxLength(60)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('descricao').setLabel('Descrição (ao criar) ou ID do usuário (ao dar)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('recompensa').setLabel('XP,Moedas de recompensa (ao criar, ex: 100,50)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)));
+        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('acao').setLabel('Ação: "criar" ou "dar"').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('nome').setLabel('Nome da conquista').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true).setMaxLength(60)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('descricao').setLabel('Descrição / ID do usuário (ao dar)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('recompensa').setLabel('Recompensa XP,Moedas (ex: 100,50)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)));
         return i.showModal(modal);
     }
     if (action === 'nivel_reward') {
@@ -419,7 +425,7 @@ async function adminButtons(i, action) {
     }
     if (action === 'rank') {
         const modal = new discord_js_1.ModalBuilder().setCustomId('modal:rank').setTitle('Definir Rank');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('usuario').setLabel('ID ou @menção do usuário').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('rank').setLabel(`Rank: ${types_1.RANKS.join(', ')}`).setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)));
+        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('usuario').setLabel('ID ou @menção do usuário').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('rank').setLabel('Rank (Recruta, Membro, Veterano, Elite…)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(true).setPlaceholder(types_1.RANKS.join(', '))));
         return i.showModal(modal);
     }
     // ── Registro de Cargos ────────────────────────────────────────────────
@@ -591,7 +597,7 @@ async function configButtons(i, action, extra) {
     if (action === 'welcome') {
         const config = await (0, helpers_1.getConfig)(i.guild.id);
         const modal = new discord_js_1.ModalBuilder().setCustomId('modal:config:welcome').setTitle('Mensagem de Boas-vindas');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('mensagem').setLabel('Mensagem ({user} = menção, {server} = servidor)').setStyle(discord_js_1.TextInputStyle.Paragraph).setRequired(false).setPlaceholder(config.welcomeMessage ?? 'Bem-vindo(a) {user} à {server}!').setMaxLength(500)));
+        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('mensagem').setLabel('Mensagem ({user} = menção, {server} = nome)').setStyle(discord_js_1.TextInputStyle.Paragraph).setRequired(false).setPlaceholder(config.welcomeMessage ?? 'Bem-vindo(a) {user} à {server}!').setMaxLength(500)));
         return i.showModal(modal);
     }
 }
@@ -912,6 +918,64 @@ function missionLabel(type) {
     };
     return map[type] ?? type;
 }
+// ─── BOTPANEL ─────────────────────────────────────────────────────────────────
+/** Constrói o embed do painel inline — sem depender de import externo */
+function _panelEmbed() {
+    const cfg = (0, botConfig_1.getBotConfig)();
+    return new discord_js_1.EmbedBuilder()
+        .setColor(0x4a235a)
+        .setTitle('🛠️ Painel de Features do Bot')
+        .setDescription('Ative ou desative funcionalidades globais do bot.\nSomente donos do bot podem usar este painel.')
+        .addFields({
+        name: '💤 Sistema AFK',
+        value: cfg.featAfk
+            ? '✅ **Ativado** — `/afk` disponível, menções detectadas'
+            : '❌ **Desativado** — comando e detecção desligados',
+        inline: false,
+    }, {
+        name: '📩 DM de Boas-vindas',
+        value: cfg.featWelcomeDm
+            ? '✅ **Ativado** — novos membros recebem DM da aliança'
+            : '❌ **Desativado** — DM não é enviada',
+        inline: false,
+    })
+        .setFooter({ text: '⚔️ Aliança Skyline — Bot Owner Panel' })
+        .setTimestamp();
+}
+function _panelRow() {
+    const cfg = (0, botConfig_1.getBotConfig)();
+    return new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+        .setCustomId('botpanel:toggle_afk')
+        .setLabel(cfg.featAfk ? 'Desativar AFK' : 'Ativar AFK')
+        .setEmoji(cfg.featAfk ? '❌' : '✅')
+        .setStyle(cfg.featAfk ? discord_js_1.ButtonStyle.Danger : discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder()
+        .setCustomId('botpanel:toggle_welcomedm')
+        .setLabel(cfg.featWelcomeDm ? 'Desativar DM Boas-vindas' : 'Ativar DM Boas-vindas')
+        .setEmoji(cfg.featWelcomeDm ? '❌' : '✅')
+        .setStyle(cfg.featWelcomeDm ? discord_js_1.ButtonStyle.Danger : discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder()
+        .setCustomId('botpanel:refresh')
+        .setLabel('Atualizar')
+        .setEmoji('🔄')
+        .setStyle(discord_js_1.ButtonStyle.Secondary));
+}
+async function botpanelButtons(i, action) {
+    // ── deferUpdate é a primeira chamada absoluta — sem await antes ──────────
+    // Garante que o Discord receba o acknowledge em <50ms, eliminando timeout.
+    await i.deferUpdate();
+    if (!(0, allowlist_1.isBotOwner)(i.user.id)) {
+        await i.followUp({ content: '❌ Apenas donos do bot podem usar este painel.', ephemeral: true });
+        return;
+    }
+    // Toggle aplica no cache de memória imediatamente; DB write é fire-and-forget
+    if (action === 'toggle_afk') {
+        (0, botConfig_1.updateBotConfig)({ featAfk: !(0, botConfig_1.getBotConfig)().featAfk }).catch(console.error);
+    }
+    else if (action === 'toggle_welcomedm') {
+        (0, botConfig_1.updateBotConfig)({ featWelcomeDm: !(0, botConfig_1.getBotConfig)().featWelcomeDm }).catch(console.error);
+    }
+    // Atualiza o painel original no lugar
+    await i.editReply({ embeds: [_panelEmbed()], components: [_panelRow()] });
+}
 // ── /rpgwipe confirmation buttons ────────────────────────────────────────────
 async function rpgwipeButtons(interaction, action) {
     const { isOwner } = await Promise.resolve().then(() => __importStar(require('../utils/permissions')));
@@ -1039,20 +1103,16 @@ async function selfRoleToggle(i, extra) {
         if (hasRole) {
             await member.roles.remove(roleId);
             const remEmbed = new discord_js_1.EmbedBuilder().setColor(0xE74C3C)
-          .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`);
-        (0, embedTemplates_1.applyTemplate)(remEmbed, 'selfrole.remove');
-        return i.editReply({
-                embeds: [remEmbed],
-            });
+                .setDescription(`❌ O cargo ${role} foi **removido** do seu perfil.`);
+            (0, embedTemplates_1.applyTemplate)(remEmbed, 'selfrole.remove');
+            return i.editReply({ embeds: [remEmbed] });
         }
         else {
             await member.roles.add(roleId);
             const addEmbed = new discord_js_1.EmbedBuilder().setColor(0x2ECC71)
-          .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`);
-        (0, embedTemplates_1.applyTemplate)(addEmbed, 'selfrole.add');
-        return i.editReply({
-                embeds: [addEmbed],
-            });
+                .setDescription(`✅ O cargo ${role} foi **adicionado** ao seu perfil!`);
+            (0, embedTemplates_1.applyTemplate)(addEmbed, 'selfrole.add');
+            return i.editReply({ embeds: [addEmbed] });
         }
     }
     catch {

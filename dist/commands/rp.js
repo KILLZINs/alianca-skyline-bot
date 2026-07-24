@@ -38,7 +38,7 @@ const client_1 = require("../database/client");
 const embeds_1 = require("../utils/embeds");
 const botConfig_1 = require("../utils/botConfig");
 const embedTemplates_1 = require("../utils/embedTemplates");
-// ─── GIF LIBRARY ─────────────────────────────────────────────────────────────
+// ─── GIF LIBRARY ────────────────────────────────────────────────────────────
 const FALLBACK = {
     abracar: ['https://media.tenor.com/GCpA2vTg06IAAAAC/anime-hug.gif', 'https://media.tenor.com/Y0nwWvRMzFwAAAAC/hug-anime.gif', 'https://media.tenor.com/oiCi-p0r0KEAAAAC/hug-anime.gif'],
     beijar: ['https://media.tenor.com/G8k1WEK2XYQAAAAC/anime-kiss.gif', 'https://media.tenor.com/kMYc7tHwT80AAAAC/anime-kiss.gif', 'https://media.tenor.com/Ly4j56jDO-0AAAAC/kiss-anime.gif'],
@@ -59,7 +59,7 @@ const FALLBACK = {
     recusar: ['https://media.tenor.com/yFi3KfGOuLEAAAAC/anime-no.gif', 'https://media.tenor.com/9g2j0dAXGqYAAAAC/no-anime.gif'],
     chutar: ['https://media.tenor.com/O6DKqvPVNWsAAAAC/kick-anime.gif', 'https://media.tenor.com/ZBR6iLlMICoAAAAC/anime-kick.gif'],
     apontar: ['https://media.tenor.com/4Q0-tBJoiTwAAAAC/anime-point.gif', 'https://media.tenor.com/HlLqBlWq27wAAAAC/point-anime.gif'],
-    // ─── Novas ações SFW ────────────────────────────────────────────────────────
+    // ─── Novas ações SFW ────────────────────────────────────────────────────────────
     abraco_por_tras: ['https://media.tenor.com/j-ICDRD6QRMAAAAC/anime-hug.gif', 'https://media.tenor.com/KGQGKNzMzMMAAAAC/hug-from-behind-anime.gif', 'https://media.tenor.com/tGJFb9CYpXgAAAAC/cuddle-anime.gif'],
     proteger: ['https://media.tenor.com/GCpA2vTg06IAAAAC/anime-hug.gif', 'https://media.tenor.com/Y0nwWvRMzFwAAAAC/hug-anime.gif', 'https://media.tenor.com/JBzCOBkxMwsAAAAC/anime-headpat.gif'],
     confortar: ['https://media.tenor.com/GCpA2vTg06IAAAAC/anime-hug.gif', 'https://media.tenor.com/tGJFb9CYpXgAAAAC/cuddle-anime.gif', 'https://media.tenor.com/Y0nwWvRMzFwAAAAC/hug-anime.gif'],
@@ -68,8 +68,8 @@ const FALLBACK = {
     pegar_no_colo: ['https://media.tenor.com/tGJFb9CYpXgAAAAC/cuddle-anime.gif', 'https://media.tenor.com/FGK58e24Pq0AAAAC/cuddle.gif', 'https://media.tenor.com/GCpA2vTg06IAAAAC/anime-hug.gif'],
     xingar_carinhoso: ['https://media.tenor.com/5I3A-FaXr_EAAAAC/anime-cry.gif', 'https://media.tenor.com/9DmMHBuoaqsAAAAC/anime-laugh.gif', 'https://media.tenor.com/klGr5r3lzCkAAAAC/anime-laugh.gif'],
     suspirar: ['https://media.tenor.com/TqnFpMzMG4QAAAAC/anime-sleeping.gif', 'https://media.tenor.com/Q_lFhv5vNikAAAAC/cry-anime.gif'],
-    // ─── 18+ / sugestivo ────────────────────────────────────────────────────────
-    sarrar: ['https://media.tenor.com/Fxt79qS2XNIAAAAC/anime-dancing.gif', 'https://media.tenor.com/3-W2-2u-BRIAAAAC/anime-dance-sexy.gif', 'https://media.tenor.com/sXJFMPpXeIcAAAAC/anime-dancing.gif'],
+    // ─── 18+ / sugestivo ───────────────────────────────────────────────────────────────
+    sarrar: ['https://media.tenor.com/Fxt79qS2XNIAAAAC/anime-dancing.gif', 'https://media.tenor.com/3-W2-2u-BRIAAAAC/anime-dance-sexy.gif', 'https://media.tenor.com/sXJFMPpXeIcAAAAC/anime-dance.gif'],
     beijo_triplo: ['https://media.tenor.com/jj8j8Jrfg2cAAAAC/anime-kiss-three.gif', 'https://media.tenor.com/G8k1WEK2XYQAAAAC/anime-kiss.gif', 'https://media.tenor.com/Ly4j56jDO-0AAAAC/kiss-anime.gif'],
     trisal: ['https://media.tenor.com/zj4XXo0Haj8AAAAC/anime-kiss-couple.gif', 'https://media.tenor.com/jj8j8Jrfg2cAAAAC/anime-kiss-three.gif'],
     morder_pescoco: ['https://media.tenor.com/TGS6BrU9BQIAAAAC/bite-anime.gif', 'https://media.tenor.com/nFy1Y3o5nZIAAAAC/anime-bite.gif', 'https://media.tenor.com/IpgBjX9HXicAAAAC/anime-bite.gif'],
@@ -113,7 +113,8 @@ async function tryApi(url, extract) {
         if (!res.ok)
             return null;
         const data = await res.json();
-        return extract(data) ?? null;
+        const extracted = extract(data);
+        return extracted ?? null;
     }
     catch {
         return null;
@@ -157,40 +158,40 @@ function pronoun(g) {
 }
 const ACTIONS = {
     // SFW originais
-    abracar: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** deu um abraço quentinho em **{art_T}{T}**! 🤗', paired_mf: '**O {S}** apertou **a {T}** com muito carinho! 🤗', paired_fm: '**A {S}** deu um abraço apertado em **o {T}**! 🤗', paired_mm: '**O {S}** deu um abraço de mano em **o {T}**! 🤜', paired_ff: '**A {S}** e **a {T}** se abraçaram! 🌸' },
-    beijar: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** beijou **{art_T}{T}**! 💋', paired_mf: '**O {S}** deu um beijo em **a {T}**! 😘', paired_fm: '**A {S}** beijou **o {T}** de surpresa! 😘', paired_mm: '**O {S}** deu um beijo em **o {T}**! 💋', paired_ff: '**A {S}** beijou **a {T}**! 💋🌸' },
-    cafune: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** fez cafuné em **{art_T}{T}**! 🥰', paired_mf: '**O {S}** fez cafuné em **a {T}** com amor! 🥰', paired_fm: '**A {S}** fez cafuné na cabeça de **o {T}**! 🥰', paired_mm: '**O {S}** fez cafuné em **o {T}** (que cena)! 😂', paired_ff: '**A {S}** fez cafuné em **a {T}** com todo carinho! 🌸' },
-    tapa: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** deu um tapa em **{art_T}{T}**! 👋', paired_mf: '**O {S}** deu um tapa em **a {T}**! Tá bem merecido? 🤣', paired_fm: '**A {S}** esbofeteou **o {T}** com força! 💥', paired_mm: '**O {S}** brigando com **o {T}** 😂', paired_ff: '**A {S}** tapou **a {T}**! 💥' },
-    morder: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** mordeu **{art_T}{T}**! 😤', paired_mf: '**O {S}** mordeu **a {T}**! Cuidado! 😈', paired_fm: '**A {S}** mordeu **o {T}**! Que safadinha! 😈', paired_mm: '**O {S}** mordeu **o {T}** 😂', paired_ff: '**A {S}** mordeu **a {T}**! 😤' },
+    abracar: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** deu um abraço quentinho em **{art_T}{T}**! 🤗', paired_mf: '**O {S}** apertou **a {T}** com muito carinho! 🤗', paired_fm: '**A {S}** abraçou **o {T}** com força! 🤗', paired_mm: '**{S}** e **{T}** trocaram um abraço de boracha! 💪', paired_ff: '**{S}** e **{T}** se abraçaram carinhosamente! 🤗' },
+    beijar: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** beijou **{art_T}{T}**! 💋', paired_mf: '**O {S}** deu um beijo em **a {T}**! 😘', paired_fm: '**A {S}** beijou **o {T}** de forma apaixonada! 😘', paired_mm: '**{S}** deu um beijo em **{T}**! 😘', paired_ff: '**{S}** e **{T}** se beijaram! 💋' },
+    cafune: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** fez cafuné em **{art_T}{T}**! 🥰', paired_mf: '**O {S}** fez cafuné em **a {T}** com amor! 🥰', paired_fm: '**A {S}** fez cafuné em **o {T}**! 🥰', paired_mm: '**{S}** fez cafuné em **{T}**! 🥰', paired_ff: '**{S}** fez cafuné em **{T}**! 🥰' },
+    tapa: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** deu um tapa em **{art_T}{T}**! 👋', paired_mf: '**O {S}** deu um tapa em **a {T}**! Tá bem merecido? 🤣', paired_fm: '**A {S}** deu um tapa em **o {T}**! 😤', paired_mm: '**{S}** deu um tapa em **{T}**! 👋', paired_ff: '**{S}** deu um tapa em **{T}**! 👋' },
+    morder: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** mordeu **{art_T}{T}**! 😤', paired_mf: '**O {S}** mordeu **a {T}**! Cuidado! 😈', paired_fm: '**A {S}** mordeu **o {T}**! Cuidado! 😈', paired_mm: '**{S}** mordeu **{T}**! 😤', paired_ff: '**{S}** mordeu **{T}**! 😤' },
     chorar: { color: embeds_1.COLORS.INFO, solo: '**{art_S}{S}** está chorando... 😢 Alguém dê um abraço!', paired: '**{art_S}{S}** está chorando no ombro de **{art_T}{T}** 😢' },
-    dancar: { color: embeds_1.COLORS.GOLD, solo: '**{art_S}{S}** está dançando! 🕺', paired: '**{art_S}{S}** está dançando com **{art_T}{T}**! 💃🕺', paired_mf: '**O {S}** dançando com **a {T}**! 💃🕺' },
+    dancar: { color: embeds_1.COLORS.GOLD, solo: '**{art_S}{S}** está dançando! 🕺', paired: '**{art_S}{S}** está dançando com **{art_T}{T}**! 💃🕺', paired_mf: '**O {S}** dançando com **a {T}**! 💃🕺', paired_fm: '**A {S}** dançando com **o {T}**! 💃🕺', paired_mm: '**{S}** e **{T}** estão dançando! 🕺', paired_ff: '**{S}** e **{T}** estão dançando! 💃' },
     rir: { color: embeds_1.COLORS.GOLD, solo: '**{art_S}{S}** está morrendo de rir! 😂', paired: '**{art_S}{S}** está rindo de **{art_T}{T}** 😂' },
     acenar: { color: embeds_1.COLORS.SUCCESS, solo: '**{art_S}{S}** está acenando! 👋', paired: '**{art_S}{S}** acenou para **{art_T}{T}**! 👋' },
-    cutucar: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** cutucou **{art_T}{T}**! 👉', paired_mf: '**O {S}** cutucou **a {T}** com o dedo! 👉', paired_fm: '**A {S}** ficou cutucando **o {T}** 👉' },
-    aconchegar: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** se aninhou com **{art_T}{T}**! 🥰', paired_mf: '**O {S}** se aninhou com **a {T}** no sofá! 🥰', paired_fm: '**A {S}** se aninhou com **o {T}**! 🥰', paired_ff: '**A {S}** e **a {T}** se aconchegaram! 🌸' },
+    cutucar: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** cutucou **{art_T}{T}**! 👉', paired_mf: '**O {S}** cutucou **a {T}** com o dedo! 👉', paired_fm: '**A {S}** ficou cutucando **o {T}**! 👉', paired_mm: '**{S}** cutucou **{T}**! 👉', paired_ff: '**{S}** cutucou **{T}**! 👉' },
+    aconchegar: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** se aninhou com **{art_T}{T}**! 🥰', paired_mf: '**O {S}** se aninhou com **a {T}** no sofá! 🥰', paired_fm: '**A {S}** se aninhou com **o {T}**! 🥰', paired_mm: '**{S}** se aninhou com **{T}**! 🥰', paired_ff: '**{S}** se aninhou com **{T}**! 🥰' },
     highfive: { color: embeds_1.COLORS.SUCCESS, paired: '**{art_S}{S}** deu um high five em **{art_T}{T}**! ✋🙌' },
-    piscar: { color: embeds_1.COLORS.INFO, solo: '**{art_S}{S}** está piscando para você! 😉', paired: '**{art_S}{S}** piscou para **{art_T}{T}**! 😉', paired_mf: '**O {S}** piscou gostosamente para **a {T}** 😉', paired_fm: '**A {S}** piscou para **o {T}** de forma irresistível! 😉' },
+    piscar: { color: embeds_1.COLORS.INFO, solo: '**{art_S}{S}** está piscando para você! 😉', paired: '**{art_S}{S}** piscou para **{art_T}{T}**! 😉', paired_mf: '**O {S}** piscou gostoso para **a {T}**! 😉', paired_fm: '**A {S}** piscou para **o {T}**! 😉', paired_mm: '**{S}** piscou para **{T}**! 😉', paired_ff: '**{S}** piscou para **{T}**! 😉' },
     dormir: { color: embeds_1.COLORS.DARK, solo: '**{art_S}{S}** foi dormir! 😴 Boas noites~', paired: '**{art_S}{S}** adormeceu no colo de **{art_T}{T}**! 😴' },
     dedo_legal: { color: embeds_1.COLORS.SUCCESS, solo: '**{art_S}{S}** mandou um joinha! 👍', paired: '**{art_S}{S}** mandou um joinha para **{art_T}{T}**! 👍' },
     beber: { color: embeds_1.COLORS.WARNING, solo: '**{art_S}{S}** está bebendo! 🍺 Saúde!', paired: '**{art_S}{S}** brindou com **{art_T}{T}**! 🍻 Saúde!' },
     recusar: { color: embeds_1.COLORS.ERROR, solo: '**{art_S}{S}** recusou! ❌', paired: '**{art_S}{S}** recusou **{art_T}{T}**! ❌' },
-    chutar: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** chutou **{art_T}{T}**! 🦵💥', paired_mf: '**O {S}** chutou **a {T}** 💥', paired_fm: '**A {S}** deu um chute voador em **o {T}** 🦵' },
-    apontar: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** está apontando para **{art_T}{T}**! 👉', paired_mf: '**O {S}** apontou o dedo para **a {T}** 👉', paired_fm: '**A {S}** apontou para **o {T}** 👉' },
-    // ─── Novas SFW ───────────────────────────────────────────────────────────
-    abraco_por_tras: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** deu um abraço por trás em **{art_T}{T}**! 🫂💕', paired_mf: '**O {S}** abraçou **a {T}** por trás de surpresa! 🫂', paired_fm: '**A {S}** abraçou **o {T}** por trás com carinho! 🫂', paired_ff: '**A {S}** abraçou **a {T}** por trás! 🌸🫂' },
-    proteger: { color: 0x3498DB, paired: '**{art_S}{S}** protegeu **{art_T}{T}** com o próprio corpo! 🛡️💙', paired_mf: '**O {S}** colocou o corpo na frente de **a {T}**! 🛡️', paired_fm: '**A {S}** protegeu **o {T}** bravamente! ⚔️🛡️' },
-    confortar: { color: 0x9B59B6, paired: '**{art_S}{S}** está confortando **{art_T}{T}**... 🫂💜', paired_mf: '**O {S}** passou o braço em torno de **a {T}** com gentileza! 💜', paired_fm: '**A {S}** está confortando **o {T}** 💙', paired_ff: '**A {S}** abriu os braços para **a {T}** 🌸' },
-    corar: { color: 0xFF69B4, solo: '**{art_S}{S}** está corando! 😳🌸', paired: '**{art_S}{S}** corou de **{art_T}{T}**! 😳', paired_mf: '**O {S}** ficou todo vermelho por causa de **a {T}**! 😳💗', paired_fm: '**A {S}** corou feito um tomate por causa de **o {T}**! 🌹😳' },
-    ninar: { color: embeds_1.COLORS.DARK, paired: '**{art_S}{S}** está ninando **{art_T}{T}**... 🌙🎵', paired_mf: '**O {S}** está cantando de ninar para **a {T}** adormecer! 🌙', paired_fm: '**A {S}** está ninando **o {T}** com uma canção suave! 🎶💤' },
-    pegar_no_colo: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** pegou **{art_T}{T}** no colo! 🤗💕', paired_mf: '**O {S}** carregou **a {T}** no colo! 💑', paired_fm: '**A {S}** pegou **o {T}** no colo com esforço! 💪😂' },
-    xingar_carinhoso: { color: embeds_1.COLORS.WARNING, solo: '**{art_S}{S}** está sendo grosseirinho(a) de amor! 😤💕', paired: '**{art_S}{S}** xingou **{art_T}{T}** carinhosamente! 😤💕', paired_mf: '**O {S}** chamou **a {T}** de idiota com um sorriso enorme! 😂💕', paired_fm: '**A {S}** está xingando **o {T}** com muito amor! 😤🌸' },
+    chutar: { color: embeds_1.COLORS.ERROR, paired: '**{art_S}{S}** chutou **{art_T}{T}**! 🦵💥', paired_mf: '**O {S}** chutou **a {T}** 💥', paired_fm: '**A {S}** deu um chute voador em **o {T}**! 💥', paired_mm: '**{S}** chutou **{T}**! 🦵💥', paired_ff: '**{S}** chutou **{T}**! 🦵💥' },
+    apontar: { color: embeds_1.COLORS.WARNING, paired: '**{art_S}{S}** está apontando para **{art_T}{T}**! 👉', paired_mf: '**O {S}** apontou o dedo para **a {T}** 👉', paired_fm: '**A {S}** apontou para **o {T}** 👉', paired_mm: '**{S}** apontou para **{T}**! 👉', paired_ff: '**{S}** apontou para **{T}**! 👉' },
+    // ─── Novas SFW ────────────────────────────────────────────────────────────────────
+    abraco_por_tras: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** deu um abraço por trás em **{art_T}{T}**! 🫂💕', paired_mf: '**O {S}** abraçou **a {T}** por trás de surpresa! 🫂', paired_fm: '**A {S}** abraçou **o {T}** por trás! 🫂💕', paired_mm: '**{S}** abraçou **{T}** por trás! 🫂', paired_ff: '**{S}** abraçou **{T}** por trás! 🫂' },
+    proteger: { color: 0x3498DB, paired: '**{art_S}{S}** protegeu **{art_T}{T}** com o próprio corpo! 🛡️💙', paired_mf: '**O {S}** colocou o corpo na frente de **a {T}**! 🛡️', paired_fm: '**A {S}** se colocou na frente de **o {T}** para protegê-lo! 🛡️💙', paired_mm: '**{S}** protegeu **{T}**! 🛡️', paired_ff: '**{S}** protegeu **{T}**! 🛡️💙' },
+    confortar: { color: 0x9B59B6, paired: '**{art_S}{S}** está confortando **{art_T}{T}**... 🫂💜', paired_mf: '**O {S}** passou o braço em torno de **a {T}** com gentileza! 💜', paired_fm: '**A {S}** confortou **o {T}**... 🫂💜', paired_mm: '**{S}** confortou **{T}**! 🫂', paired_ff: '**{S}** confortou **{T}**! 🫂💜' },
+    corar: { color: 0xFF69B4, solo: '**{art_S}{S}** está corando! 😳🌸', paired: '**{art_S}{S}** corou de **{art_T}{T}**! 😳', paired_mf: '**O {S}** ficou todo vermelho perto de **a {T}**! 😳', paired_fm: '**A {S}** ficou corada perto de **o {T}**! 😳', paired_mm: '**{S}** corou perto de **{T}**! 😳', paired_ff: '**{S}** corou perto de **{T}**! 😳🌸' },
+    ninar: { color: embeds_1.COLORS.DARK, paired: '**{art_S}{S}** está ninando **{art_T}{T}**... 🌙🎵', paired_mf: '**O {S}** está cantando de ninar para **a {T}** adormecer! 🌙', paired_fm: '**A {S}** está ninando **o {T}**... 🌙🎵', paired_mm: '**{S}** está ninando **{T}**... 🌙', paired_ff: '**{S}** está ninando **{T}**... 🌙🎵' },
+    pegar_no_colo: { color: embeds_1.COLORS.PRIMARY, paired: '**{art_S}{S}** pegou **{art_T}{T}** no colo! 🤗💕', paired_mf: '**O {S}** carregou **a {T}** no colo! 💑', paired_fm: '**A {S}** pegou **o {T}** no colo! 🤗💕', paired_mm: '**{S}** pegou **{T}** no colo! 🤗', paired_ff: '**{S}** pegou **{T}** no colo! 🤗💕' },
+    xingar_carinhoso: { color: embeds_1.COLORS.WARNING, solo: '**{art_S}{S}** está sendo grosseirinho(a) de amor! 😤💕', paired: '**{art_S}{S}** xingou **{art_T}{T}** carinhosamente! 😤💕', paired_mf: '**O {S}** xingou **a {T}** de um jeito fofo! 😤', paired_fm: '**A {S}** xingou **o {T}** com carinho! 😤💕', paired_mm: '**{S}** xingou **{T}** carinhosamente! 😤', paired_ff: '**{S}** xingou **{T}** carinhosamente! 😤💕' },
     suspirar: { color: embeds_1.COLORS.INFO, solo: '**{art_S}{S}** deu um suspiro profundo... 😮‍💨', paired: '**{art_S}{S}** suspirou olhando para **{art_T}{T}**... 😮‍💨💕' },
-    // ─── 18+ ─────────────────────────────────────────────────────────────────
-    sarrar: { color: embeds_1.COLORS.ERROR, nsfw: true, paired: '**{art_S}{S}** sarrou em **{art_T}{T}**! 😏🔥', paired_mf: '**O {S}** sarrou gostoso em **a {T}**! 🔥😏', paired_fm: '**A {S}** sarrou em **o {T}** sem piedade! 🔥😈', paired_mm: '**O {S}** sarrou em **o {T}**! 🔥', paired_ff: '**A {S}** sarrou em **a {T}**! 🔥🌸' },
-    beijo_triplo: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** quer dar um beijo triplo mas não tem ninguém aqui! 😅💋', paired: '**{art_S}{S}** tentou um beijo triplo mas só **{art_T}{T}** apareceu! 😂', triple: '**{art_S}{S}**, **{art_T}{T}** e **{art_T2}{T2}** trocaram um beijo triplo! 😘💋🔥' },
-    trisal: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** quer um trisal mas não tem ninguém disponível! 😅😈', paired: '**{art_S}{S}** convidou **{art_T}{T}** para um trisal 😈 (falta alguém!)', triple: '**{art_S}{S}** formou um trisal com **{art_T}{T}** e **{art_T2}{T2}**! 😈🔥💕' },
-    morder_pescoco: { color: embeds_1.COLORS.ERROR, nsfw: true, paired: '**{art_S}{S}** mordeu o pescoço de **{art_T}{T}**! 🦷😈🔥', paired_mf: '**O {S}** mordeu o pescoço de **a {T}** de forma irresistível! 😈', paired_fm: '**A {S}** mordeu o pescoço de **o {T}** com malícia! 😈' },
-    seduzir: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** está seduzindo geral! 😏🔥', paired: '**{art_S}{S}** está seduzindo **{art_T}{T}**! 😏🔥', paired_mf: '**O {S}** está tentando seduzir **a {T}** 😏🔥', paired_fm: '**A {S}** está seduzindo **o {T}** sem misericórdia! 😏🔥' },
+    // ─── 18+ ──────────────────────────────────────────────────────────────────────────
+    sarrar: { color: embeds_1.COLORS.ERROR, nsfw: true, paired: '**{art_S}{S}** sarrou em **{art_T}{T}**! 😏🔥', paired_mf: '**O {S}** sarrou gostoso em **a {T}**! 🔥😏', paired_fm: '**A {S}** sarrou em **o {T}**! 😏🔥', paired_mm: '**{S}** sarrou em **{T}**! 😏', paired_ff: '**{S}** sarrou em **{T}**! 😏🔥' },
+    beijo_triplo: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** quer dar um beijo triplo mas não tem ninguém aqui! 😅💋', paired: '**{art_S}{S}** tentou um beijo triplo mas só dois! 😅💋', triple: '**{S}**, **{T}** e **{T2}** trocaram um beijo triplo! 🔥😘' },
+    trisal: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** quer um trisal mas não tem ninguém disponível! 😅😈', paired: '**{art_S}{S}** convidou **{art_T}{T}** para um trisal! 😏', triple: '**{S}**, **{T}** e **{T2}** estão em um trisal! 🔥😈' },
+    morder_pescoco: { color: embeds_1.COLORS.ERROR, nsfw: true, paired: '**{art_S}{S}** mordeu o pescoço de **{art_T}{T}**! 🦷😈🔥', paired_mf: '**O {S}** mordeu o pescoço de **a {T}** de forma irresistível! 🦷🔥', paired_fm: '**A {S}** mordeu o pescoço de **o {T}**! 🦷😈🔥', paired_mm: '**{S}** mordeu o pescoço de **{T}**! 🦷😈', paired_ff: '**{S}** mordeu o pescoço de **{T}**! 🦷😈🔥' },
+    seduzir: { color: embeds_1.COLORS.ERROR, nsfw: true, solo: '**{art_S}{S}** está seduzindo geral! 😏🔥', paired: '**{art_S}{S}** está seduzindo **{art_T}{T}**! 😏🔥', paired_mf: '**O {S}** está seduzindo **a {T}** irresistivelmente! 😏🔥', paired_fm: '**A {S}** está seduzindo **o {T}**! 😏🔥', paired_mm: '**{S}** está seduzindo **{T}**! 😏', paired_ff: '**{S}** está seduzindo **{T}**! 😏🔥' },
 };
 function buildMessage(def, sUser, sGen, tUser, tGen, t2User, t2Gen) {
     const artS = article(sGen);
@@ -219,7 +220,7 @@ function buildMessage(def, sUser, sGen, tUser, tGen, t2User, t2Gen) {
         return replacements(exactCombo);
     return replacements(def.paired);
 }
-// ─── COMMAND ──────────────────────────────────────────────────────────────────
+// ─── COMMAND ──────────────────────────────────────────────────────────────────────────
 exports.default = {
     category: 'roleplay',
     data: new discord_js_1.SlashCommandBuilder()

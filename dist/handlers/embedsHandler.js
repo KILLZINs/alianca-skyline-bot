@@ -12,13 +12,13 @@ const embeds_1 = require("../utils/embeds");
 const allowlist_1 = require("../utils/allowlist");
 // ──── Tipos dos campos configuráveis ────────────────────────────────────────────────────────────────────────────────────────
 const FIELD_META = {
-    title:        { label: 'Título',          emoji: '📌', placeholder: 'Título do embed (máx 256 chars)',         style: discord_js_1.TextInputStyle.Short,     max: 256  },
-    description:  { label: 'Descrição',       emoji: '📄', placeholder: 'Descrição / conteúdo principal...',       style: discord_js_1.TextInputStyle.Paragraph, max: 4000 },
-    color:        { label: 'Cor (hex)',        emoji: '🎨', placeholder: '#9B59B6 (hex 6 dígitos)',                 style: discord_js_1.TextInputStyle.Short,     max: 7    },
-    thumbnailUrl: { label: 'Thumbnail',        emoji: '🖼️', placeholder: 'https://i.imgur.com/exemplo.png',         style: discord_js_1.TextInputStyle.Short,     max: 512  },
-    imageUrl:     { label: 'Imagem',           emoji: '📸', placeholder: 'https://i.imgur.com/banner.png',          style: discord_js_1.TextInputStyle.Short,     max: 512  },
-    footerText:   { label: 'Texto do Rodapé', emoji: '📝', placeholder: '⚔️ Aliança Skyline',                      style: discord_js_1.TextInputStyle.Short,     max: 2048 },
-    footerIcon:   { label: 'Ícone do Rodapé', emoji: '🔗', placeholder: 'https://... (URL do ícone do rodapé)',    style: discord_js_1.TextInputStyle.Short,     max: 512  },
+    title: { label: 'Título', emoji: '📌', placeholder: 'Título do embed (máx 256 chars)', style: discord_js_1.TextInputStyle.Short, max: 256 },
+    description: { label: 'Descrição', emoji: '📄', placeholder: 'Descrição / conteúdo principal...', style: discord_js_1.TextInputStyle.Paragraph, max: 4000 },
+    color: { label: 'Cor (hex)', emoji: '🎨', placeholder: '#9B59B6 (hex 6 dígitos)', style: discord_js_1.TextInputStyle.Short, max: 7 },
+    thumbnailUrl: { label: 'Thumbnail', emoji: '🖼️', placeholder: 'https://i.imgur.com/exemplo.png', style: discord_js_1.TextInputStyle.Short, max: 512 },
+    imageUrl: { label: 'Imagem', emoji: '📸', placeholder: 'https://i.imgur.com/banner.png', style: discord_js_1.TextInputStyle.Short, max: 512 },
+    footerText: { label: 'Texto do Rodapé', emoji: '📝', placeholder: '⚔️ Aliança Skyline', style: discord_js_1.TextInputStyle.Short, max: 2048 },
+    footerIcon: { label: 'Ícone do Rodapé', emoji: '🔗', placeholder: 'https://... (URL do ícone do rodapé)', style: discord_js_1.TextInputStyle.Short, max: 512 },
 };
 const ALL_FIELDS = Object.keys(FIELD_META);
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -30,7 +30,7 @@ function buildEmbedsHome() {
         .setDescription('Personalize **título, descrição, cor, imagens e rodapé** de cada embed do bot.\n\n' +
         '🖼️ **Imagens e Thumbnail:** cole o URL direto (ex: `https://i.imgur.com/...`)\n\n' +
         'Selecione uma categoria para começar:')
-        .addFields({ name: '🎯 Geral',        value: 'Boas-vindas, Level Up, Roleplay, Painel',          inline: true }, { name: '⚔️ RPG',          value: 'Vitória, Derrota, Empate, Level Up, Reencarnação', inline: true }, { name: '🐉 Boss Mundial',  value: 'Spawn, Derrota e Expiração do Boss Mundial',       inline: true }, { name: '💍 Casamento',     value: 'Proposta, Casamento e Divórcio',                   inline: true }, { name: '📋 Missões',       value: 'Missão diária e semanal concluída',                inline: true }, { name: '🌐 Aliança',       value: 'Embed oficial da aliança',                         inline: true }, { name: '🎫 Tickets',       value: 'Ticket criado, fechado e assumido',                inline: true }, { name: '🎁 Sorteios',      value: 'Sorteio iniciado e anúncio de vencedor',           inline: true }, { name: '🔨 Moderação',     value: 'Aviso, ban e kick aplicados',                      inline: true }, { name: '🎭 Cargos',        value: 'Cargo adicionado e removido (self-role)',           inline: true });
+        .addFields({ name: '🎯 Geral', value: 'Boas-vindas, Level Up, Roleplay, Painel', inline: true }, { name: '⚔️ RPG', value: 'Vitória, Derrota, Empate, Level Up, Reencarnação', inline: true }, { name: '🐉 Boss Mundial', value: 'Spawn, Derrota e Expiração do Boss Mundial', inline: true }, { name: '💍 Casamento', value: 'Proposta, Casamento e Divórcio', inline: true }, { name: '📋 Missões', value: 'Missão diária e semanal concluída', inline: true }, { name: '🌐 Aliança', value: 'Embed oficial da aliança', inline: true }, { name: '🎫 Tickets', value: 'Ticket criado, fechado e assumido', inline: true }, { name: '🎁 Sorteios', value: 'Sorteio iniciado e anúncio de vencedor', inline: true }, { name: '🔨 Moderação', value: 'Aviso, ban e kick aplicados', inline: true }, { name: '🎭 Cargos', value: 'Cargo adicionado e removido (self-role)', inline: true });
     const rows = [
         new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|geral').setLabel('🎯 Geral').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|rpg').setLabel('⚔️ RPG').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|bossmundial').setLabel('🐉 Boss').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|casamento').setLabel('💍 Casamento').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|missoes').setLabel('📋 Missões').setStyle(discord_js_1.ButtonStyle.Secondary)),
         new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|alianca').setLabel('🌐 Aliança').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|tickets').setLabel('🎫 Tickets').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|sorteios').setLabel('🎁 Sorteios').setStyle(discord_js_1.ButtonStyle.Success), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|moderacao').setLabel('🔨 Moderação').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId('embeds:cat|selfrole').setLabel('🎭 Cargos').setStyle(discord_js_1.ButtonStyle.Secondary)),
@@ -73,10 +73,10 @@ function buildEditPanel(key) {
             display = (0, embedTemplates_1.intToHex)(value);
         }
         else if ((field === 'imageUrl' || field === 'thumbnailUrl') && value) {
-            display = '✅ ' + String(value).slice(0, 60) + (String(value).length > 60 ? '…' : '');
+            display = '✅ ' + value.slice(0, 60) + (value.length > 60 ? '…' : '');
         }
         else {
-            display = value != null ? String(value) : '*(padrão)*';
+            display = value ?? '*(padrão)*';
         }
         return { name: meta.emoji + ' ' + meta.label, value: display, inline: true };
     }));
@@ -86,7 +86,7 @@ function buildEditPanel(key) {
             .setCustomId('embeds:field|' + key + '|' + field)
             .setLabel(FIELD_META[field].emoji + ' ' + FIELD_META[field].label)
             .setStyle(discord_js_1.ButtonStyle.Secondary))),
-        // Linha 2: thumbnailUrl, imageUrl, footerText, footerIcon + Resetar
+        // Linha 2: thumbnailUrl, imageUrl, footerText, footerIcon (todos via modal de URL/texto)
         new discord_js_1.ActionRowBuilder().addComponents([
             ...ALL_FIELDS.slice(3).map(field => new discord_js_1.ButtonBuilder()
                 .setCustomId('embeds:field|' + key + '|' + field)
@@ -162,7 +162,7 @@ async function handleEmbedsButtonRaw(i) {
                     .setRequired(false)
                     .setPlaceholder(meta.placeholder)
                     .setMaxLength(meta.max)
-                    .setValue(String(current).slice(0, meta.max))));
+                    .setValue(current.toString().slice(0, meta.max))));
                 await i.showModal(modal);
                 break;
             }
@@ -212,6 +212,7 @@ async function handleEmbedCfgModal(i, raw) {
             await (0, embedTemplates_1.setTemplateField)(key, 'color', colorInt);
         }
         else if (field === 'imageUrl' || field === 'thumbnailUrl') {
+            // Valida se parece uma URL
             if (!rawValue.startsWith('http://') && !rawValue.startsWith('https://')) {
                 await i.editReply({ embeds: [(0, embeds_1.errorEmbed)('URL inválida', 'O link deve começar com `https://`.')] });
                 return;
@@ -225,3 +226,4 @@ async function handleEmbedCfgModal(i, raw) {
         await i.editReply({ embeds: [(0, embeds_1.successEmbed)('✅ Salvo', 'Campo **' + (FIELD_META[field]?.label ?? field) + '** atualizado!'), embed], components: rows });
     }
 }
+//# sourceMappingURL=embedsHandler.js.map

@@ -11,6 +11,7 @@ exports.setTemplateField = setTemplateField;
 exports.clearTemplate = clearTemplate;
 exports.hexToInt = hexToInt;
 exports.intToHex = intToHex;
+exports.refreshImageUrls = refreshImageUrls;
 const client_1 = require("../database/client");
 exports.EMBED_CATALOG = {
     // Geral
@@ -134,48 +135,85 @@ function hexToInt(hex) {
 function intToHex(n) {
     return '#' + n.toString(16).padStart(6, '0').toUpperCase();
 }
-
-// ── Refresh de URLs do Discord CDN ───────────────────────────────────────────
-function isDiscordUrlExpiredSoon(url) {
-    try {
-        const match = url.match(/[?&]ex=([a-fA-F0-9]+)/);
-        if (!match) return false;
-        const expiryMs = parseInt(match[1], 16) * 1000;
-        return expiryMs < Date.now() + 12 * 60 * 60 * 1000;
-    } catch { return false; }
+// ── Refresh e validação de URLs do Discord CDN ────────────────────────────────
+//
+// URLs de attachments do Discord expiram (~24h) E ficam inválidas imediatamente
+// quando a mensagem-fonte é deletada — mesmo que o parâmetro `ex=` ainda esteja
+// dentro do prazo. Por isso verificamos TODAS as URLs a cada ciclo:
+//
+//  • URLs que o Discord consegue renovar  → atualiza com o novo token
+//  • URLs que o Discord NÃO consegue renovar (mensagem deletada) → remove do
+//    banco/cache para que o embed pare de tentar exibir uma imagem quebrada
+/** Retorna true se a URL é um attachment do CDN do Discord. */
+function isDiscordAttachmentUrl(url) {
+    return /cdn\.discordapp\.com\/attachments\//.test(url);
 }
+/**
+ * Verifica e renova TODAS as URLs de imagem do Discord nos templates.
+ * URLs de mensagens deletadas são automaticamente limpas do banco/cache.
+ * Chame no evento ready e a cada 12h.
+ */
 async function refreshImageUrls(botToken) {
     const imageFields = ['imageUrl', 'thumbnailUrl', 'footerIcon'];
+    // Coleta TODAS as URLs de attachment do Discord — não apenas as "próximas de expirar".
+    // Isso é necessário para detectar URLs de mensagens deletadas: elas ficam 404
+    // imediatamente, mas o parâmetro `ex=` ainda pode parecer válido por timestamp.
     const urlToTargets = new Map();
     for (const [key, tpl] of _cache.entries()) {
         for (const field of imageFields) {
             const url = tpl[field];
-            if (url && isDiscordUrlExpiredSoon(url)) {
+            if (url && isDiscordAttachmentUrl(url)) {
                 const list = urlToTargets.get(url) ?? [];
                 list.push({ key, field });
                 urlToTargets.set(url, list);
             }
         }
     }
-    if (urlToTargets.size === 0) return;
-    console.log('[EmbedTemplates] Refreshing ' + urlToTargets.size + ' CDN URL(s)...');
+    if (urlToTargets.size === 0)
+        return;
+    console.log(`[EmbedTemplates] Verificando ${urlToTargets.size} URL(s) de imagem...`);
     try {
         const res = await fetch('https://discord.com/api/v10/attachments/refresh-urls', {
             method: 'POST',
-            headers: { Authorization: 'Bot ' + botToken, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ attachment_urls: [...urlToTargets.keys()] }),
         });
-        if (!res.ok) { console.warn('[EmbedTemplates] refresh-urls returned ' + res.status); return; }
+        if (!res.ok) {
+            console.warn(`[EmbedTemplates] refresh-urls returned ${res.status}`);
+            return;
+        }
         const data = await res.json();
+        // Conjunto das URLs originais que o Discord conseguiu renovar
+        const refreshedOriginals = new Set(data.refreshed_urls.map(r => r.original));
+        // 1. Atualizar as URLs renovadas no banco e no cache
         for (const { original, refreshed } of data.refreshed_urls) {
             for (const { key, field } of urlToTargets.get(original) ?? []) {
                 await client_1.prisma.embedTemplate.update({ where: { key }, data: { [field]: refreshed } }).catch(() => null);
                 const cached = _cache.get(key);
-                if (cached) cached[field] = refreshed;
+                if (cached)
+                    cached[field] = refreshed;
             }
         }
-        console.log('[EmbedTemplates] ' + data.refreshed_urls.length + ' URL(s) renovada(s).');
-    } catch (err) { console.error('[EmbedTemplates] Falha ao renovar URLs:', err); }
+        // 2. Limpar URLs que o Discord NÃO renovou — mensagem-fonte foi deletada.
+        //    Sem esta limpeza, o embed continuaria tentando exibir uma imagem 404.
+        let cleared = 0;
+        for (const [url, targets] of urlToTargets.entries()) {
+            if (refreshedOriginals.has(url))
+                continue; // renovada com sucesso, ignorar
+            for (const { key, field } of targets) {
+                await client_1.prisma.embedTemplate.update({ where: { key }, data: { [field]: null } }).catch(() => null);
+                const cached = _cache.get(key);
+                if (cached)
+                    cached[field] = null;
+                cleared++;
+            }
+        }
+        const summary = `[EmbedTemplates] ${data.refreshed_urls.length} URL(s) renovada(s)` +
+            (cleared > 0 ? `, ${cleared} URL(s) inválida(s) removida(s) (mensagem deletada)` : '') + '.';
+        console.log(summary);
+    }
+    catch (err) {
+        console.error('[EmbedTemplates] Falha ao renovar URLs:', err);
+    }
 }
-exports.refreshImageUrls = refreshImageUrls;
 //# sourceMappingURL=embedTemplates.js.map

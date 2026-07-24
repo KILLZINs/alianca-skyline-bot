@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
 const helpers_1 = require("../utils/helpers");
 const embeds_1 = require("../utils/embeds");
+const botConfig_1 = require("../utils/botConfig");
 const client_1 = require("../database/client");
 const alliance_1 = require("../utils/alliance");
 const embedTemplates_1 = require("../utils/embedTemplates");
@@ -24,7 +25,7 @@ exports.default = {
         const blacklisted = await client_1.prisma.allianceBlacklist.findUnique({ where: { userId: member.id } }).catch(() => null);
         if (blacklisted) {
             await member.ban({ reason: `[Blacklist Aliança] ${blacklisted.reason ?? 'Sem motivo'}` }).catch(console.error);
-            return; // Não continuar com boas-vindas
+            return;
         }
         const config = await (0, helpers_1.getConfig)(guildId);
         // ─── Log de entrada ───────────────────────────────────────────────────────
@@ -61,7 +62,10 @@ exports.default = {
                 await channel.send({ content: `👋 Boas-vindas, ${member}!`, embeds: [embed] }).catch(console.error);
             }
         }
-        // ─── DM com embed oficial da aliança (obrigatório para servidores da aliança) ──
+        // ─── DM com embed oficial da aliança ──────────────────────────────────────
+        // Controlado pelo painel de features do bot (/botpanel → DM Boas-vindas)
+        if (!(0, botConfig_1.getBotConfig)().featWelcomeDm)
+            return;
         const inAlliance = await (0, alliance_1.isAllianceServer)(guildId).catch(() => false);
         if (!inAlliance)
             return;
@@ -77,7 +81,7 @@ exports.default = {
                 .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
                 .setTimestamp();
             (0, embedTemplates_1.applyTemplate)(dmEmbed, 'welcome.dm');
-        await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null); // DMs podem estar fechadas
+            await member.user.send({ embeds: [dmEmbed, allianceEmbed] }).catch(() => null);
         }
         catch { /* silently ignore DM errors */ }
     },

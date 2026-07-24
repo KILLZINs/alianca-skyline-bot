@@ -75,20 +75,21 @@ async function buildOfficialAllianceEmbed(client) {
     }
     if (!description.trim())
         description = '*Nenhum servidor cadastrado ainda.*';
-    const allianceEmbed = new discord_js_1.EmbedBuilder()
+    const embed = new discord_js_1.EmbedBuilder()
         .setColor(embeds_1.COLORS.PRIMARY)
         .setTitle('🌌 Aliança Skyline — Servidores Oficiais')
         .setDescription(description)
         .addFields({
         name: '📊 Resumo',
-        value: `\*\*${servers.length}\*\* servidor(es) • \*\*${totalMembers.toLocaleString('pt-BR')}\*\* membros totais`,
+        value: `**${servers.length}** servidor(es) • **${totalMembers.toLocaleString('pt-BR')}** membros totais`,
         inline: false,
     })
         .setThumbnail(client.user?.displayAvatarURL() ?? null)
         .setFooter({ text: '⚔️ Aliança Skyline — Unidos somos mais fortes' })
         .setTimestamp();
-    (0, embedTemplates_1.applyTemplate)(allianceEmbed, 'alliance.official');
-    return allianceEmbed;
+    // tenha sempre precedência sobre qualquer valor salvo no banco (imageUrl do template).
+    (0, embedTemplates_1.applyTemplate)(embed, 'alliance.official');
+    return embed;
 }
 // ─── Atualiza classes de todos os servidores ──────────────────────────────────
 async function updateAllServerClasses(client) {

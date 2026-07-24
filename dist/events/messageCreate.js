@@ -38,6 +38,7 @@ const helpers_1 = require("../utils/helpers");
 const character_1 = require("../rpg/services/character");
 const embeds_1 = require("../utils/embeds");
 const types_1 = require("../types");
+const botConfig_1 = require("../utils/botConfig");
 const client_1 = require("../database/client");
 // BUG FIX: cooldown por guildId:userId em vez de só userId
 const cooldowns = new Map();
@@ -54,10 +55,52 @@ exports.default = {
     name: 'messageCreate',
     once: false,
     async execute(message) {
-        if (message.author.bot || !message.guild || message.content.startsWith('/'))
+        if (message.author.bot || !message.guild)
             return;
         const guildId = message.guild.id;
         const authorId = message.author.id;
+        // ─── AFK: remover status do autor ao enviar mensagem ─────────────────────
+        if ((0, botConfig_1.getBotConfig)().featAfk) {
+            try {
+                const authorAfk = await client_1.prisma.afkStatus.findUnique({ where: { userId: authorId } });
+                if (authorAfk) {
+                    await client_1.prisma.afkStatus.delete({ where: { userId: authorId } });
+                    const notify = await message.channel
+                        .send({ content: `👋 ${message.author}, seu AFK foi removido!` }).catch(() => null);
+                    if (notify)
+                        setTimeout(() => notify.delete().catch(() => null), 5000);
+                }
+            }
+            catch { /* tabela pode ainda não existir — ignora silenciosamente */ }
+            // ─── AFK: notificar ao mencionar usuário em AFK ─────────────────────────
+            if (message.mentions.users.size > 0) {
+                for (const [, mentionedUser] of message.mentions.users) {
+                    if (mentionedUser.bot || mentionedUser.id === authorId)
+                        continue;
+                    try {
+                        const afk = await client_1.prisma.afkStatus.findUnique({ where: { userId: mentionedUser.id } });
+                        if (!afk)
+                            continue;
+                        const since = Math.floor(afk.setAt.getTime() / 1000);
+                        const warn = await message.channel.send({
+                            embeds: [
+                                new discord_js_1.EmbedBuilder()
+                                    .setColor(embeds_1.COLORS.WARNING)
+                                    .setTitle(`💤 ${mentionedUser.username} está em AFK`)
+                                    .setDescription(`**Motivo:** ${afk.message}\n**Desde:** <t:${since}:R>`)
+                                    .setFooter({ text: '⚔️ Aliança Skyline' }),
+                            ],
+                        }).catch(() => null);
+                        if (warn)
+                            setTimeout(() => warn.delete().catch(() => null), 8000);
+                    }
+                    catch { /* ignora */ }
+                }
+            }
+        }
+        // Não processar mais nada para mensagens de slash command ou DMs
+        if (message.content.startsWith('/'))
+            return;
         const config = await (0, helpers_1.getConfig)(guildId);
         // ─── Track daily message count ────────────────────────────────────────────
         client_1.prisma.serverStat.upsert({
@@ -118,7 +161,6 @@ exports.default = {
         const dateStr = today();
         const weekStr = thisWeek();
         if (config.featMissions) {
-            // Garante que as missões do dia existem antes de tentar atualizar
             const { ensureDailyMissions, ensureWeeklyMissions } = await Promise.resolve().then(() => __importStar(require('../commands/utility/missoes')));
             await Promise.all([
                 ensureDailyMissions(authorId, guildId),
@@ -127,7 +169,6 @@ exports.default = {
         }
         if (config.featMissions)
             await Promise.all([
-                // Diárias
                 client_1.prisma.dailyMission.updateMany({
                     where: { memberId: authorId, guildId, type: 'estar_online', dateStr, completed: false },
                     data: { progress: 1, completed: true },
@@ -140,7 +181,6 @@ exports.default = {
                     where: { memberId: authorId, guildId, type: 'ganhar_xp', dateStr, completed: false },
                     data: { progress: { increment: xpGain } },
                 }),
-                // Semanais
                 client_1.prisma.weeklyMission.updateMany({
                     where: { memberId: authorId, guildId, type: 'enviar_mensagens_sem', weekStr, completed: false },
                     data: { progress: { increment: 1 } },
@@ -150,17 +190,15 @@ exports.default = {
                     data: { progress: { increment: xpGain } },
                 }),
             ]).catch(() => null);
-        // Marcar missões concluídas (só se featMissions habilitado)
         if (!config.featMissions) {
             // skip mission completion tracking
         }
         else {
             client_1.prisma.dailyMission.findMany({ where: { memberId: authorId, guildId, dateStr, completed: false } })
                 .then(pending => Promise.all(pending.filter(m => m.progress >= m.target).map(m => client_1.prisma.dailyMission.update({ where: { id: m.id }, data: { completed: true } })))).catch(() => null);
-            // Marcar missões concluídas (semanais)
             client_1.prisma.weeklyMission.findMany({ where: { memberId: authorId, guildId, weekStr, completed: false } })
                 .then(pending => Promise.all(pending.filter(m => m.progress >= m.target).map(m => client_1.prisma.weeklyMission.update({ where: { id: m.id }, data: { completed: true } })))).catch(() => null);
-        } // end featMissions
+        }
         // ─── Level up ─────────────────────────────────────────────────────────────
         if (before && after.level > before.level) {
             client_1.prisma.levelReward.findUnique({ where: { guildId_level: { guildId, level: after.level } } })
