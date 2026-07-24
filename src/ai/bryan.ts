@@ -1,8 +1,8 @@
-// Bryan I.A. — Google Gemini (gratuito, sem cartão de crédito)
+// Bryan I.A. — OpenAI (gpt-4o-mini)
 export async function askBryan(userMessage: string, username: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return '🔑 Chave do Gemini não configurada. Adicione GEMINI_API_KEY nas variáveis do Railway!';
+    return '🔑 Chave da OpenAI não configurada. Adicione OPENAI_API_KEY nas variáveis do Railway!';
   }
 
   const systemPrompt =
@@ -14,14 +14,20 @@ export async function askBryan(userMessage: string, username: string): Promise<s
     `O usuário que está falando com você se chama ${username}.`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: 500, temperature: 0.8 },
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userMessage },
+        ],
+        max_tokens: 500,
+        temperature: 0.8,
       }),
     });
 
@@ -30,24 +36,16 @@ export async function askBryan(userMessage: string, username: string): Promise<s
       try { body = await res.text(); } catch { /* ignore */ }
       console.error(`[Bryan IA] HTTP ${res.status}:`, body.slice(0, 300));
 
-      if (res.status === 429) return '⏳ Muitas perguntas de uma vez! Aguarda alguns segundos e tenta de novo.';
-      if (res.status === 400) {
-        // Chave inválida também retorna 400 no Gemini
-        if (body.includes('API key')) return '🔑 Chave do Gemini inválida. Verifique a variável GEMINI_API_KEY no Railway!';
-        return '❌ Erro 400 ao chamar o Gemini. Tenta novamente!';
-      }
-      if (res.status === 403) return '🔑 Chave do Gemini sem permissão (403). Avise um admin!';
-      if (res.status === 404) return '❌ Modelo do Gemini não encontrado (404). Avise um admin!';
+      if (res.status === 429) return '⏳ Muitas requisições! Tenta novamente em alguns segundos.';
+      if (res.status === 401) return '🔑 Chave da OpenAI inválida. Verifique OPENAI_API_KEY no Railway!';
+      if (res.status === 402 || (res.status === 429 && body.includes('quota')))
+        return '💳 Saldo OpenAI esgotado. Avise um admin para recarregar!';
 
       return `❌ Erro ${res.status} ao contactar a IA. Avise um admin!`;
     }
 
-    const data = await res.json() as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return text ?? 'Eita, não recebi resposta. Tenta de novo!';
+    const data = await res.json() as { choices: { message: { content: string } }[] };
+    return data.choices[0]?.message?.content?.trim() ?? 'Eita, não recebi resposta. Tenta de novo!';
   } catch (err) {
     console.error('[Bryan IA] Erro de rede:', err);
     return '❌ Erro de conexão com a IA. Tenta novamente!';
