@@ -1,53 +1,49 @@
-// Bryan I.A. — usa fetch nativo para chamar a OpenAI API (sem depender do pacote openai)
-    export async function askBryan(userMessage: string, username: string): Promise<string> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return '🔑 Chave da OpenAI não configurada. Peça a um admin do bot para adicionar OPENAI_API_KEY nas variáveis de ambiente!';
-    }
+// Bryan I.A. — Google Gemini (gratuito, sem cartão de crédito)
+export async function askBryan(userMessage: string, username: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return '🔑 Chave do Gemini não configurada. Peça a um admin para adicionar GEMINI_API_KEY nas variáveis do Railway!';
+  }
 
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const systemPrompt =
+    'Você é Bryan, o assistente inteligente e animado da Aliança Skyline — ' +
+    'uma aliança de servidores do Discord cujo objetivo é unir comunidades para crescerem juntas. ' +
+    'Você ajuda membros com dúvidas sobre a aliança, o bot e o Discord em geral. ' +
+    'Fale sempre em português do Brasil. Use linguagem jovem e descontraída (gírias leves são ok). ' +
+    'Seja conciso: máximo de 400 palavras por resposta. Não use markdown excessivo. ' +
+    `O usuário que está falando com você se chama ${username}.`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Você é Bryan, o assistente inteligente e animado da Aliança Skyline — ' +
-                'uma aliança de servidores do Discord cujo objetivo é unir comunidades para crescerem juntas. ' +
-                'Você ajuda membros com dúvidas sobre a aliança, o bot e o Discord em geral. ' +
-                'Fale sempre em português do Brasil. Use linguagem jovem e descontraída (gírias leves são ok). ' +
-                'Seja conciso: máximo de 400 palavras por resposta. Não use markdown excessivo. ' +
-                `O usuário que está falando com você se chama ${username}.`,
-            },
-            {
-              role: 'user',
-              content: userMessage,
-            },
-          ],
-          max_tokens: 500,
-          temperature: 0.8,
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+          generationConfig: { maxOutputTokens: 500, temperature: 0.8 },
         }),
-      });
-
-      if (res.status === 429) return '⏳ Estou sobrecarregado agora! Tenta novamente em alguns segundos.';
-      if (res.status === 401) return '🔑 Chave da API inválida. Avise um admin do bot!';
-
-      if (!res.ok) {
-        console.error('[Bryan IA] HTTP', res.status);
-        return '❌ Erro ao contactar a IA. Tenta novamente!';
       }
+    );
 
-      const data = await res.json() as { choices: { message: { content: string } }[] };
-      return data.choices[0]?.message?.content?.trim() ?? 'Eita, não recebi resposta. Tenta de novo!';
-    } catch (err) {
-      console.error('[Bryan IA] Erro:', err);
-      return '❌ Ocorreu um erro ao processar sua mensagem. Tenta novamente!';
+    if (res.status === 429) return '⏳ Muitas perguntas de uma vez! Aguarda alguns segundos e tenta de novo.';
+    if (res.status === 400) return '❌ Mensagem inválida. Tenta reformular!';
+    if (res.status === 403) return '🔑 Chave do Gemini inválida ou sem permissão. Avise um admin!';
+
+    if (!res.ok) {
+      console.error('[Bryan IA] HTTP', res.status);
+      return '❌ Erro ao contactar a IA. Tenta novamente!';
     }
-    }
-    
+
+    const data = await res.json() as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text ?? 'Eita, não recebi resposta. Tenta de novo!';
+  } catch (err) {
+    console.error('[Bryan IA] Erro:', err);
+    return '❌ Ocorreu um erro ao processar sua mensagem. Tenta novamente!';
+  }
+}
