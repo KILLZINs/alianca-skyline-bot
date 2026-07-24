@@ -1,11 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.askBryan = askBryan;
-// Bryan I.A. — OpenAI (gpt-4o-mini)
+// Bryan I.A. — Mistral AI (tier gratuito, sem cartão de crédito)
 async function askBryan(userMessage, username) {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.MISTRAL_API_KEY;
     if (!apiKey) {
-        return '🔑 Chave da OpenAI não configurada. Adicione OPENAI_API_KEY nas variáveis do Railway!';
+        return '🔑 Chave da Mistral não configurada. Adicione MISTRAL_API_KEY nas variáveis do Railway!';
     }
     const systemPrompt = 'Você é Bryan, o assistente inteligente e animado da Aliança Skyline — ' +
         'uma aliança de servidores do Discord cujo objetivo é unir comunidades para crescerem juntas. ' +
@@ -14,14 +14,14 @@ async function askBryan(userMessage, username) {
         'Seja conciso: máximo de 400 palavras por resposta. Não use markdown excessivo. ' +
         `O usuário que está falando com você se chama ${username}.`;
     try {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
+                model: 'mistral-small-latest',
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userMessage },
@@ -38,11 +38,9 @@ async function askBryan(userMessage, username) {
             catch { /* ignore */ }
             console.error(`[Bryan IA] HTTP ${res.status}:`, body.slice(0, 300));
             if (res.status === 429)
-                return '⏳ Muitas requisições! Tenta novamente em alguns segundos.';
+                return '⏳ Muitas requisições! Aguarda alguns segundos e tenta de novo.';
             if (res.status === 401)
-                return '🔑 Chave da OpenAI inválida. Verifique OPENAI_API_KEY no Railway!';
-            if (res.status === 402 || (res.status === 429 && body.includes('quota')))
-                return '💳 Saldo OpenAI esgotado. Avise um admin para recarregar!';
+                return '🔑 Chave da Mistral inválida. Verifique MISTRAL_API_KEY no Railway!';
             return `❌ Erro ${res.status} ao contactar a IA. Avise um admin!`;
         }
         const data = await res.json();
