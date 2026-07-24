@@ -14,7 +14,6 @@ import { ensureDailyMissions } from '../commands/utility/missoes';
 import { isBotOwner, isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
 import { applyTemplate } from '../utils/embedTemplates';
 import { getBotConfig, updateBotConfig } from '../utils/botConfig';
-import { buildBotPanelEmbed, buildBotPanelRow } from '../commands/botpanel';
 
 export async function handleButton(interaction: ButtonInteraction) {
   const parts = interaction.customId.split(':');
@@ -1225,21 +1224,73 @@ function missionLabel(type: string): string {
 
 // ─── BOTPANEL ─────────────────────────────────────────────────────────────────
 
+/** Constrói o embed do painel inline — sem depender de import externo */
+function _panelEmbed() {
+  const cfg = getBotConfig();
+  return new EmbedBuilder()
+    .setColor(0x4a235a)
+    .setTitle('🛠️ Painel de Features do Bot')
+    .setDescription('Ative ou desative funcionalidades globais do bot.\nSomente donos do bot podem usar este painel.')
+    .addFields(
+      {
+        name: '💤 Sistema AFK',
+        value: cfg.featAfk
+          ? '✅ **Ativado** — `/afk` disponível, menções detectadas'
+          : '❌ **Desativado** — comando e detecção desligados',
+        inline: false,
+      },
+      {
+        name: '📩 DM de Boas-vindas',
+        value: cfg.featWelcomeDm
+          ? '✅ **Ativado** — novos membros recebem DM da aliança'
+          : '❌ **Desativado** — DM não é enviada',
+        inline: false,
+      },
+    )
+    .setFooter({ text: '⚔️ Aliança Skyline — Bot Owner Panel' })
+    .setTimestamp();
+}
+
+function _panelRow() {
+  const cfg = getBotConfig();
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('botpanel:toggle_afk')
+      .setLabel(cfg.featAfk ? 'Desativar AFK' : 'Ativar AFK')
+      .setEmoji(cfg.featAfk ? '❌' : '✅')
+      .setStyle(cfg.featAfk ? ButtonStyle.Danger : ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('botpanel:toggle_welcomedm')
+      .setLabel(cfg.featWelcomeDm ? 'Desativar DM Boas-vindas' : 'Ativar DM Boas-vindas')
+      .setEmoji(cfg.featWelcomeDm ? '❌' : '✅')
+      .setStyle(cfg.featWelcomeDm ? ButtonStyle.Danger : ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('botpanel:refresh')
+      .setLabel('Atualizar')
+      .setEmoji('🔄')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
 async function botpanelButtons(i: ButtonInteraction, action: string) {
+  // ── deferUpdate é a primeira chamada absoluta — sem await antes ──────────
+  // Garante que o Discord receba o acknowledge em <50ms, eliminando timeout.
+  await i.deferUpdate();
+
   if (!isBotOwner(i.user.id)) {
-    return i.reply({ embeds: [errorEmbed('Acesso Negado', 'Apenas donos do bot podem usar este painel.')], ephemeral: true });
+    await i.followUp({ content: '❌ Apenas donos do bot podem usar este painel.', ephemeral: true });
+    return;
   }
 
-  // Aplica toggle no cache de memória IMEDIATAMENTE (síncrono)
-  // e dispara o DB em background — garante que i.update() rode <1ms depois
+  // Toggle aplica no cache de memória imediatamente; DB write é fire-and-forget
   if (action === 'toggle_afk') {
     updateBotConfig({ featAfk: !getBotConfig().featAfk }).catch(console.error);
   } else if (action === 'toggle_welcomedm') {
     updateBotConfig({ featWelcomeDm: !getBotConfig().featWelcomeDm }).catch(console.error);
   }
 
-  // i.update() é chamado sem nenhum await antes — responde dentro de ms
-  return i.update({ embeds: [buildBotPanelEmbed()], components: [buildBotPanelRow()] });
+  // Atualiza o painel original no lugar
+  await i.editReply({ embeds: [_panelEmbed()], components: [_panelRow()] });
 }
 
 // ── /rpgwipe confirmation buttons ────────────────────────────────────────────
