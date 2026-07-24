@@ -51,12 +51,75 @@ function thisWeek() {
     const week = Math.ceil(((now.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
     return `${now.getFullYear()}-W${week.toString().padStart(2, '0')}`;
 }
-exports.default = {
+
+    const PREFIX         = 'b ';
+    const BRYAN_REGEX    = /^bryan[,!.?:\s]/i;
+    const bryanCooldowns = new Map();
+    exports.default = {
     name: 'messageCreate',
     once: false,
     async execute(message) {
         if (message.author.bot || !message.guild)
             return;
+          const content = message.content.trim();
+          const guildId = message.guild.id;
+          const authorId = message.author.id;
+
+          // ─── Bryan I.A. ────────────────────────────────────────────────────
+          if (BRYAN_REGEX.test(content)) {
+              const bryanKey = `${guildId}:${authorId}`;
+              const now = Date.now();
+              if (now - (bryanCooldowns.get(bryanKey) ?? 0) < 8000) {
+                  await message.reply('⏳ Espera um pouquinho antes de me chamar de novo!').catch(() => null);
+                  return;
+              }
+              bryanCooldowns.set(bryanKey, now);
+              const userMsg = content.replace(/^bryan[,!.?:\s]*/i, '').trim();
+              if (!userMsg) {
+                  await message.reply('👋 Oi! Me faz uma pergunta, pode falar!').catch(() => null);
+                  return;
+              }
+              await message.channel.sendTyping().catch(() => null);
+              const displayName = message.member?.displayName ?? message.author.username;
+              const { askBryan } = require('../ai/bryan');
+              const response = await askBryan(userMsg, displayName);
+              await message.reply(response).catch(() => null);
+              return;
+          }
+
+          // ─── Prefix commands ────────────────────────────────────────────────
+          if (content.toLowerCase().startsWith(PREFIX)) {
+              const args    = content.slice(PREFIX.length).trim().split(/\s+/);
+              const cmdName = args.shift()?.toLowerCase() ?? '';
+              if (!cmdName) return;
+              const extClient = message.client;
+              // 1. Prefix-only commands (b ajuda, b info, etc.)
+              const prefixCmd = extClient.prefixCommands?.get(cmdName);
+              if (prefixCmd) {
+                  try { await prefixCmd.execute(message, args); }
+                  catch (err) {
+                      console.error('[Prefix] Erro em', cmdName, err);
+                      await message.reply('❌ Erro ao executar esse comando.').catch(() => null);
+                  }
+                  return;
+              }
+              // 2. Slash commands via shim
+              const slashCmd = extClient.commands?.get(cmdName);
+              if (slashCmd) {
+                  try {
+                      const { createMessageShim } = require('../utils/messageCommandShim');
+                      const shim = createMessageShim(message, cmdName, args);
+                      await slashCmd.execute(shim);
+                  } catch (err) {
+                      console.error('[Prefix→Slash] Erro em', cmdName, err);
+                      await message.reply('❌ Erro ao executar esse comando.').catch(() => null);
+                  }
+                  return;
+              }
+              await message.reply(`❌ Comando \`${cmdName}\` não encontrado. Use \`b ajuda\` para ver os disponíveis.`).catch(() => null);
+              return;
+          }
+    
         const guildId = message.guild.id;
         const authorId = message.author.id;
         // ─── AFK: remover status do autor ao enviar mensagem ─────────────────────
