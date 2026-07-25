@@ -815,13 +815,13 @@ async function sendTicketFeedback(i: ModalSubmitInteraction, extra: string[]) {
   const color    = star >= 4 ? COLORS.SUCCESS : star >= 3 ? COLORS.WARNING : COLORS.ERROR;
 
   const embed = baseEmbed(color)
-    .setTitle('📝 Registro de Atendimento')
+    .setTitle('📝 Feedback de Atendimento')
     .setAuthor({ name: i.user.username, iconURL: i.user.displayAvatarURL() })
     .addFields(
-      { name: '🛡️ Atendente', value: `<@${i.user.id}>`,                                          inline: true },
-      { name: '🎫 Ticket de',  value: ticket?.authorId ? `<@${ticket.authorId}>` : 'Desconhecido', inline: true },
-      { name: '⭐ Nota',       value: `${filled}${empty}  **${star}/5**`,                          inline: false },
-      { name: '💬 Anotações',  value: descricao ?? '*Sem anotações.*' },
+      { name: '👤 Usuário',    value: `<@${i.user.id}>`,                                              inline: true },
+      { name: '🛡️ Atendente', value: ticket?.claimedBy ? `<@${ticket.claimedBy}>` : 'Não assumido',  inline: true },
+      { name: '⭐ Nota',       value: `${filled}${empty}  **${star}/5**`,                             inline: false },
+      { name: '💬 Comentário', value: descricao ?? '*Sem comentário.*' },
     )
     .setTimestamp();
 

@@ -854,29 +854,27 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
     }
     await i.editReply({ embeds: [successEmbed('Ticket Fechado', 'Este canal será deletado em 5 segundos.')] });
 
-    // ── DM de avaliação para quem assumiu o ticket ───────────────────────
+    // ── DM de avaliação para o autor do ticket ───────────────────────────
     try {
-      if (ticket.claimedBy) {
-        const claimer = await i.client.users.fetch(ticket.claimedBy).catch(() => null);
-        if (claimer) {
-          const guildId = i.guild!.id;
-          const closedById = i.user.id;
-          const dmEmbed = baseEmbed(COLORS.PRIMARY)
-            .setTitle('📝 Registro de Atendimento')
-            .setDescription(
-              `Você encerrou o ticket de <@${ticket.authorId}> no servidor **${i.guild!.name}**.\n\n` +
-              'Avalie o atendimento prestado clicando em uma das estrelas abaixo.',
-            )
-            .setFooter({ text: '⚔️ Aliança Skyline • Um formulário será aberto após a sua escolha' });
-          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId(`ticket_fb:1:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`ticket_fb:2:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`ticket_fb:3:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`ticket_fb:4:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`ticket_fb:5:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐⭐').setStyle(ButtonStyle.Success),
-          );
-          await claimer.send({ embeds: [dmEmbed], components: [row] }).catch(() => null);
-        }
+      const author = await i.client.users.fetch(ticket.authorId).catch(() => null);
+      if (author) {
+        const guildId = i.guild!.id;
+        const closedById = i.user.id;
+        const dmEmbed = baseEmbed(COLORS.PRIMARY)
+          .setTitle('📝 Como foi seu atendimento?')
+          .setDescription(
+            `Seu ticket no servidor **${i.guild!.name}** foi encerrado.\n\n` +
+            'Avalie o atendimento clicando em uma das estrelas abaixo. Sua opinião é importante para nós.',
+          )
+          .setFooter({ text: '⚔️ Aliança Skyline • Um formulário será aberto após a sua escolha' });
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId(`ticket_fb:1:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`ticket_fb:2:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`ticket_fb:3:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`ticket_fb:4:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`ticket_fb:5:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐⭐').setStyle(ButtonStyle.Success),
+        );
+        await author.send({ embeds: [dmEmbed], components: [row] }).catch(() => null);
       }
     } catch { /* DMs fechadas ou usuário não encontrado */ }
 
