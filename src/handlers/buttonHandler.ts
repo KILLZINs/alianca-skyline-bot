@@ -772,28 +772,174 @@ async function modButtons(i: ButtonInteraction, action: string) {
 
 async function configButtons(i: ButtonInteraction, action: string, extra: string[]) {
   if (!(await checkAdmin(i))) return;
+  const guild = i.guild!;
 
+  // ── Sub-painel de Canais (7 canais, sem limite de modal) ───────────────────
   if (action === 'channels') {
-    const modal = new ModalBuilder().setCustomId('modal:config:channels').setTitle('Configurar Canais');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('log').setLabel('ID — Canal de Logs').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('welcome').setLabel('ID — Canal de Boas-vindas').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('levelup').setLabel('ID — Canal de Level-up').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('suggestion').setLabel('ID — Canal de Sugestões').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('ticket_log').setLabel('ID — Canal de Log de Tickets').setStyle(TextInputStyle.Short).setRequired(false)),
+    await i.deferReply({ ephemeral: true });
+    const cfg = await getConfig(guild.id);
+    const fmt = (id: string | null | undefined) => (id ? `<#${id}>` : '❌ Não configurado');
+    const embed = baseEmbed(COLORS.PRIMARY)
+      .setTitle('📋 Configurar Canais')
+      .setDescription('Clique em um botão para alterar o canal correspondente.\nO bot pedirá o ID diretamente no chat.')
+      .addFields({
+        name: 'Configuração atual',
+        value: [
+          `📋 **Log:** ${fmt(cfg.logChannelId)}`,
+          `👋 **Boas-vindas:** ${fmt(cfg.welcomeChannelId)}`,
+          `🎯 **Level-up:** ${fmt(cfg.levelUpChannelId)}`,
+          `📢 **Anúncios:** ${fmt(cfg.announcementChannelId)}`,
+          `💬 **Sugestões:** ${fmt(cfg.suggestionChannelId)}`,
+          `📝 **Feedback:** ${fmt(cfg.feedbackChannelId)}`,
+          `🎫 **Ticket Log:** ${fmt(cfg.ticketLogChannelId)}`,
+        ].join('\n'),
+      });
+    const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('config:set_channel:log')         .setLabel('Log')        .setEmoji('📋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_channel:welcome')     .setLabel('Boas-vindas').setEmoji('👋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_channel:levelup')     .setLabel('Level-up')   .setEmoji('🎯').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_channel:announcement').setLabel('Anúncios')   .setEmoji('📢').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_channel:suggestion')  .setLabel('Sugestões')  .setEmoji('💬').setStyle(ButtonStyle.Secondary),
     );
-    return i.showModal(modal);
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('config:set_channel:feedback')    .setLabel('Feedback')   .setEmoji('📝').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_channel:ticket_log')  .setLabel('Ticket Log') .setEmoji('🎫').setStyle(ButtonStyle.Secondary),
+    );
+    return i.editReply({ embeds: [embed], components: [row1, row2] });
   }
 
+  // ── Sub-painel de Cargos ─────────────────────────────────────────────────
   if (action === 'roles') {
-    const modal = new ModalBuilder().setCustomId('modal:config:roles').setTitle('Configurar Cargos');
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('admin').setLabel('ID — Cargo de Admin').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('mod').setLabel('ID — Cargo de Moderador').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('member').setLabel('ID — Cargo de Membro (auto ao entrar)').setStyle(TextInputStyle.Short).setRequired(false)),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('auto').setLabel('ID — Cargo automático ao entrar').setStyle(TextInputStyle.Short).setRequired(false)),
+    await i.deferReply({ ephemeral: true });
+    const cfg = await getConfig(guild.id);
+    const fmt = (id: string | null | undefined) => (id ? `<@&${id}>` : '❌ Não configurado');
+    const embed = baseEmbed(COLORS.PRIMARY)
+      .setTitle('🎭 Configurar Cargos')
+      .setDescription('Clique em um botão para alterar o cargo correspondente.\nO bot pedirá o ID diretamente no chat.')
+      .addFields({
+        name: 'Configuração atual',
+        value: [
+          `👑 **Admin:** ${fmt(cfg.adminRoleId)}`,
+          `🔨 **Mod:** ${fmt(cfg.modRoleId)}`,
+          `👤 **Membro:** ${fmt(cfg.memberRoleId)}`,
+          `🤖 **Auto:** ${fmt(cfg.autoRoleId)}`,
+        ].join('\n'),
+      });
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('config:set_role:admin') .setLabel('Admin')      .setEmoji('👑').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_role:mod')   .setLabel('Moderador')  .setEmoji('🔨').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_role:member').setLabel('Membro')     .setEmoji('👤').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config:set_role:auto')  .setLabel('Auto-cargo') .setEmoji('🤖').setStyle(ButtonStyle.Secondary),
     );
-    return i.showModal(modal);
+    return i.editReply({ embeds: [embed], components: [row] });
+  }
+
+  // ── Definir canal via chat ────────────────────────────────────────────────
+  if (action === 'set_channel') {
+    const field = extra[0];
+    const LABELS: Record<string, string> = {
+      log: 'Canal de Logs', welcome: 'Canal de Boas-vindas', levelup: 'Canal de Level-up',
+      announcement: 'Canal de Anúncios', suggestion: 'Canal de Sugestões',
+      feedback: 'Canal de Feedback', ticket_log: 'Canal de Log de Tickets',
+    };
+    const DB_KEYS: Record<string, string> = {
+      log: 'logChannelId', welcome: 'welcomeChannelId', levelup: 'levelUpChannelId',
+      announcement: 'announcementChannelId', suggestion: 'suggestionChannelId',
+      feedback: 'feedbackChannelId', ticket_log: 'ticketLogChannelId',
+    };
+    const label = LABELS[field] ?? field;
+    const dbKey = DB_KEYS[field];
+    if (!dbKey) return;
+
+    await i.reply({
+      embeds: [baseEmbed(COLORS.WARNING)
+        .setTitle(`📋 Configurar ${label}`)
+        .setDescription(
+          'Envie o **ID do canal** ou mencione-o com **#** neste chat.\n\n' +
+          '⏱️ Você tem **60 segundos**.\n' +
+          '• Digite `limpar` para remover o canal configurado\n' +
+          '• Digite `cancelar` para cancelar'
+        )],
+      ephemeral: true,
+    });
+
+    const ch = i.channel as TextChannel;
+    const collected = await ch.awaitMessages({ filter: m => m.author.id === i.user.id, max: 1, time: 60_000 }).catch(() => null);
+    if (!collected || collected.size === 0)
+      return i.editReply({ embeds: [errorEmbed('Tempo Esgotado', 'Nenhuma resposta recebida em 60 segundos.')] });
+
+    const msg = collected.first()!;
+    await msg.delete().catch(() => null);
+    const raw = msg.content.trim();
+
+    if (raw.toLowerCase() === 'cancelar')
+      return i.editReply({ embeds: [baseEmbed(COLORS.SECONDARY).setDescription('❌ Operação cancelada.')] });
+
+    if (raw.toLowerCase() === 'limpar') {
+      await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: null }, create: { guildId: guild.id } });
+      return i.editReply({ embeds: [successEmbed(`${label} Removido`, 'Canal removido da configuração.')] });
+    }
+
+    const channelId = raw.replace(/[<#>]/g, '').trim();
+    const target = guild.channels.cache.get(channelId);
+    if (!target)
+      return i.editReply({ embeds: [errorEmbed('Canal Não Encontrado', `Canal \`${channelId}\` não existe neste servidor.\nCopie o ID clicando com o botão direito no canal.`)] });
+
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: channelId }, create: { guildId: guild.id, [dbKey]: channelId } });
+    return i.editReply({ embeds: [successEmbed(`${label} Configurado`, `Canal definido como <#${channelId}>.`)] });
+  }
+
+  // ── Definir cargo via chat ────────────────────────────────────────────────
+  if (action === 'set_role') {
+    const field = extra[0];
+    const LABELS: Record<string, string> = {
+      admin: 'Cargo de Admin', mod: 'Cargo de Moderador',
+      member: 'Cargo de Membro', auto: 'Cargo Automático',
+    };
+    const DB_KEYS: Record<string, string> = {
+      admin: 'adminRoleId', mod: 'modRoleId',
+      member: 'memberRoleId', auto: 'autoRoleId',
+    };
+    const label = LABELS[field] ?? field;
+    const dbKey = DB_KEYS[field];
+    if (!dbKey) return;
+
+    await i.reply({
+      embeds: [baseEmbed(COLORS.WARNING)
+        .setTitle(`🎭 Configurar ${label}`)
+        .setDescription(
+          'Envie o **ID do cargo** ou mencione-o com **@** neste chat.\n\n' +
+          '⏱️ Você tem **60 segundos**.\n' +
+          '• Digite `limpar` para remover o cargo configurado\n' +
+          '• Digite `cancelar` para cancelar'
+        )],
+      ephemeral: true,
+    });
+
+    const ch = i.channel as TextChannel;
+    const collected = await ch.awaitMessages({ filter: m => m.author.id === i.user.id, max: 1, time: 60_000 }).catch(() => null);
+    if (!collected || collected.size === 0)
+      return i.editReply({ embeds: [errorEmbed('Tempo Esgotado', 'Nenhuma resposta recebida em 60 segundos.')] });
+
+    const msg = collected.first()!;
+    await msg.delete().catch(() => null);
+    const raw = msg.content.trim();
+
+    if (raw.toLowerCase() === 'cancelar')
+      return i.editReply({ embeds: [baseEmbed(COLORS.SECONDARY).setDescription('❌ Operação cancelada.')] });
+
+    if (raw.toLowerCase() === 'limpar') {
+      await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: null }, create: { guildId: guild.id } });
+      return i.editReply({ embeds: [successEmbed(`${label} Removido`, 'Cargo removido da configuração.')] });
+    }
+
+    const roleId = raw.replace(/[<@&>]/g, '').trim();
+    const target = guild.roles.cache.get(roleId);
+    if (!target)
+      return i.editReply({ embeds: [errorEmbed('Cargo Não Encontrado', `Cargo \`${roleId}\` não existe neste servidor.\nCopie o ID clicando com o botão direito no cargo.`)] });
+
+    await prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: roleId }, create: { guildId: guild.id, [dbKey]: roleId } });
+    return i.editReply({ embeds: [successEmbed(`${label} Configurado`, `Cargo definido como <@&${roleId}>.`)] });
   }
 
   if (action === 'xp') {

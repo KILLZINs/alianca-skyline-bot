@@ -577,31 +577,118 @@ async function modButtons(i, action) {
 }
 // ─── CONFIG BUTTONS ───────────────────────────────────────────────────────────
 async function configButtons(i, action, extra) {
-    if (!(await (0, permissions_1.checkAdmin)(i)))
-        return;
+    if (!(await (0, permissions_1.checkAdmin)(i))) return;
+    const guild = i.guild;
+
+    // ── Sub-painel de Canais ─────────────────────────────────────────────────
     if (action === 'channels') {
-        const modal = new discord_js_1.ModalBuilder().setCustomId('modal:config:channels').setTitle('Configurar Canais');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('log').setLabel('ID — Canal de Logs').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('welcome').setLabel('ID — Canal de Boas-vindas').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('levelup').setLabel('ID — Canal de Level-up').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('suggestion').setLabel('ID — Canal de Sugestões').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('ticket_log').setLabel('ID — Canal de Log de Tickets').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)));
-        return i.showModal(modal);
+        await i.deferReply({ ephemeral: true });
+        const cfg = await (0, helpers_1.getConfig)(guild.id);
+        const fmt = (id) => id ? `<#${id}>` : '❌ Não configurado';
+        const embed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
+            .setTitle('📋 Configurar Canais')
+            .setDescription('Clique em um botão para alterar o canal.\nO bot pedirá o ID diretamente no chat.')
+            .addFields({ name: 'Configuração atual', value: [
+                `📋 **Log:** ${fmt(cfg.logChannelId)}`,
+                `👋 **Boas-vindas:** ${fmt(cfg.welcomeChannelId)}`,
+                `🎯 **Level-up:** ${fmt(cfg.levelUpChannelId)}`,
+                `📢 **Anúncios:** ${fmt(cfg.announcementChannelId)}`,
+                `💬 **Sugestões:** ${fmt(cfg.suggestionChannelId)}`,
+                `📝 **Feedback:** ${fmt(cfg.feedbackChannelId)}`,
+                `🎫 **Ticket Log:** ${fmt(cfg.ticketLogChannelId)}`,
+            ].join('\n') });
+        const row1 = new discord_js_1.ActionRowBuilder().addComponents(
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:log').setLabel('Log').setEmoji('📋').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:welcome').setLabel('Boas-vindas').setEmoji('👋').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:levelup').setLabel('Level-up').setEmoji('🎯').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:announcement').setLabel('Anúncios').setEmoji('📢').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:suggestion').setLabel('Sugestões').setEmoji('💬').setStyle(discord_js_1.ButtonStyle.Secondary),
+        );
+        const row2 = new discord_js_1.ActionRowBuilder().addComponents(
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:feedback').setLabel('Feedback').setEmoji('📝').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_channel:ticket_log').setLabel('Ticket Log').setEmoji('🎫').setStyle(discord_js_1.ButtonStyle.Secondary),
+        );
+        return i.editReply({ embeds: [embed], components: [row1, row2] });
     }
+
+    // ── Sub-painel de Cargos ─────────────────────────────────────────────────
     if (action === 'roles') {
-        const modal = new discord_js_1.ModalBuilder().setCustomId('modal:config:roles').setTitle('Configurar Cargos');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('admin').setLabel('ID — Cargo de Admin').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('mod').setLabel('ID — Cargo de Moderador').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('member').setLabel('ID — Cargo de Membro (auto ao entrar)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('auto').setLabel('ID — Cargo automático ao entrar').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false)));
-        return i.showModal(modal);
+        await i.deferReply({ ephemeral: true });
+        const cfg = await (0, helpers_1.getConfig)(guild.id);
+        const fmt = (id) => id ? `<@&${id}>` : '❌ Não configurado';
+        const embed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
+            .setTitle('🎭 Configurar Cargos')
+            .setDescription('Clique em um botão para alterar o cargo.\nO bot pedirá o ID diretamente no chat.')
+            .addFields({ name: 'Configuração atual', value: [
+                `👑 **Admin:** ${fmt(cfg.adminRoleId)}`,
+                `🔨 **Mod:** ${fmt(cfg.modRoleId)}`,
+                `👤 **Membro:** ${fmt(cfg.memberRoleId)}`,
+                `🤖 **Auto:** ${fmt(cfg.autoRoleId)}`,
+            ].join('\n') });
+        const row = new discord_js_1.ActionRowBuilder().addComponents(
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_role:admin').setLabel('Admin').setEmoji('👑').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_role:mod').setLabel('Moderador').setEmoji('🔨').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_role:member').setLabel('Membro').setEmoji('👤').setStyle(discord_js_1.ButtonStyle.Secondary),
+            new discord_js_1.ButtonBuilder().setCustomId('config:set_role:auto').setLabel('Auto-cargo').setEmoji('🤖').setStyle(discord_js_1.ButtonStyle.Secondary),
+        );
+        return i.editReply({ embeds: [embed], components: [row] });
     }
-    if (action === 'xp') {
-        const config = await (0, helpers_1.getConfig)(i.guild.id);
-        const modal = new discord_js_1.ModalBuilder().setCustomId('modal:config:xp').setTitle('Configurar XP & Proteções');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('xp_min').setLabel('XP mínimo por mensagem').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false).setPlaceholder(String(config.xpMin))), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('xp_max').setLabel('XP máximo por mensagem').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false).setPlaceholder(String(config.xpMax))), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('cooldown').setLabel('Cooldown em segundos').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false).setPlaceholder(String(config.xpCooldown))), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('antispam').setLabel('Anti-spam (true/false)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false).setPlaceholder(String(config.antiSpam))), new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('antilinks').setLabel('Anti-links (true/false)').setStyle(discord_js_1.TextInputStyle.Short).setRequired(false).setPlaceholder(String(config.antiLinks))));
-        return i.showModal(modal);
+
+    // ── Definir canal via chat ───────────────────────────────────────────────
+    if (action === 'set_channel') {
+        const field = extra[0];
+        const LABELS = { log:'Canal de Logs', welcome:'Canal de Boas-vindas', levelup:'Canal de Level-up', announcement:'Canal de Anúncios', suggestion:'Canal de Sugestões', feedback:'Canal de Feedback', ticket_log:'Canal de Log de Tickets' };
+        const DB_KEYS = { log:'logChannelId', welcome:'welcomeChannelId', levelup:'levelUpChannelId', announcement:'announcementChannelId', suggestion:'suggestionChannelId', feedback:'feedbackChannelId', ticket_log:'ticketLogChannelId' };
+        const label = LABELS[field] ?? field;
+        const dbKey = DB_KEYS[field];
+        if (!dbKey) return;
+        await i.reply({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.WARNING).setTitle(`📋 Configurar ${label}`).setDescription('Envie o **ID do canal** ou mencione-o com **#** neste chat.\n\n⏱️ Você tem **60 segundos**.\n• Digite `limpar` para remover\n• Digite `cancelar` para cancelar')], ephemeral: true });
+        const ch = i.channel;
+        const collected = await ch.awaitMessages({ filter: m => m.author.id === i.user.id, max: 1, time: 60000 }).catch(() => null);
+        if (!collected || collected.size === 0) return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Tempo Esgotado', 'Nenhuma resposta recebida em 60 segundos.')] });
+        const msg = collected.first();
+        await msg.delete().catch(() => null);
+        const raw = msg.content.trim();
+        if (raw.toLowerCase() === 'cancelar') return i.editReply({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.SECONDARY).setDescription('❌ Operação cancelada.')] });
+        if (raw.toLowerCase() === 'limpar') {
+            await client_1.prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: null }, create: { guildId: guild.id } });
+            return i.editReply({ embeds: [(0, embeds_1.successEmbed)(`${label} Removido`, 'Canal removido da configuração.')] });
+        }
+        const channelId = raw.replace(/[<#>]/g, '').trim();
+        const target = guild.channels.cache.get(channelId);
+        if (!target) return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Canal Não Encontrado', `Canal \`${channelId}\` não existe neste servidor.\nCopie o ID clicando com o botão direito no canal.`)] });
+        await client_1.prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: channelId }, create: { guildId: guild.id, [dbKey]: channelId } });
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)(`${label} Configurado`, `Canal definido como <#${channelId}>.`)] });
     }
-    if (action === 'welcome') {
-        const config = await (0, helpers_1.getConfig)(i.guild.id);
-        const modal = new discord_js_1.ModalBuilder().setCustomId('modal:config:welcome').setTitle('Mensagem de Boas-vindas');
-        modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.TextInputBuilder().setCustomId('mensagem').setLabel('Mensagem ({user} = menção, {server} = nome)').setStyle(discord_js_1.TextInputStyle.Paragraph).setRequired(false).setPlaceholder(config.welcomeMessage ?? 'Bem-vindo(a) {user} à {server}!').setMaxLength(500)));
-        return i.showModal(modal);
+
+    // ── Definir cargo via chat ───────────────────────────────────────────────
+    if (action === 'set_role') {
+        const field = extra[0];
+        const LABELS = { admin:'Cargo de Admin', mod:'Cargo de Moderador', member:'Cargo de Membro', auto:'Cargo Automático' };
+        const DB_KEYS = { admin:'adminRoleId', mod:'modRoleId', member:'memberRoleId', auto:'autoRoleId' };
+        const label = LABELS[field] ?? field;
+        const dbKey = DB_KEYS[field];
+        if (!dbKey) return;
+        await i.reply({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.WARNING).setTitle(`🎭 Configurar ${label}`).setDescription('Envie o **ID do cargo** ou mencione-o com **@** neste chat.\n\n⏱️ Você tem **60 segundos**.\n• Digite `limpar` para remover\n• Digite `cancelar` para cancelar')], ephemeral: true });
+        const ch = i.channel;
+        const collected = await ch.awaitMessages({ filter: m => m.author.id === i.user.id, max: 1, time: 60000 }).catch(() => null);
+        if (!collected || collected.size === 0) return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Tempo Esgotado', 'Nenhuma resposta recebida em 60 segundos.')] });
+        const msg = collected.first();
+        await msg.delete().catch(() => null);
+        const raw = msg.content.trim();
+        if (raw.toLowerCase() === 'cancelar') return i.editReply({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.SECONDARY).setDescription('❌ Operação cancelada.')] });
+        if (raw.toLowerCase() === 'limpar') {
+            await client_1.prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: null }, create: { guildId: guild.id } });
+            return i.editReply({ embeds: [(0, embeds_1.successEmbed)(`${label} Removido`, 'Cargo removido da configuração.')] });
+        }
+        const roleId = raw.replace(/[<@&>]/g, '').trim();
+        const target = guild.roles.cache.get(roleId);
+        if (!target) return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Cargo Não Encontrado', `Cargo \`${roleId}\` não existe neste servidor.\nCopie o ID clicando com o botão direito no cargo.`)] });
+        await client_1.prisma.guildConfig.upsert({ where: { guildId: guild.id }, update: { [dbKey]: roleId }, create: { guildId: guild.id, [dbKey]: roleId } });
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)(`${label} Configurado`, `Cargo definido como <@&${roleId}>.`)] });
     }
 }
+
 // ─── TICKET BUTTONS ───────────────────────────────────────────────────────────
 async function ticketButtons(i, action, extra) {
     if (action === 'open') {
