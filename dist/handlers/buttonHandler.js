@@ -75,6 +75,7 @@ async function handleButton(interaction) {
             case 'logs': return await (await Promise.resolve().then(() => __importStar(require('./logsHandler')))).handleLogsButton(interaction, action);
             case 'selfrole': return await selfRoleToggle(interaction, extra);
             case 'selfrole_admin': return await selfRoleAdminButtons(interaction, action, extra);
+            case 'ticket_fb': return await ticketFeedbackButton(interaction, action, extra);
         }
     }
     catch (err) {
@@ -626,6 +627,22 @@ async function ticketButtons(i, action, extra) {
                 await ch.send({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.ERROR).setTitle('🎫 Ticket Fechado').addFields({ name: 'Fechado por', value: `${i.user.tag}`, inline: true }, { name: 'Canal', value: `${ticket.channelId}`, inline: true })] });
         }
         await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Fechado', 'Este canal será deletado em 5 segundos.')] });
+        // ── DM de avaliação para o autor do ticket ────────────────────────────
+        try {
+            const author = await i.client.users.fetch(ticket.authorId).catch(() => null);
+            if (author && author.id !== i.user.id) {
+                const guildId = i.guild.id;
+                const closedById = i.user.id;
+                const dmEmbed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
+                    .setTitle('📝 Como foi seu atendimento?')
+                    .setDescription(`Seu ticket no servidor **${i.guild.name}** foi encerrado.\n\n` +
+                    'Avalie o atendimento clicando em uma das estrelas abaixo. Sua opinião é importante para nós.')
+                    .setFooter({ text: '⚔️ Aliança Skyline • Um formulário será aberto após a sua escolha' });
+                const row = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:1:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:2:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:3:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:4:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:5:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Success));
+                await author.send({ embeds: [dmEmbed], components: [row] }).catch(() => null);
+            }
+        }
+        catch { /* DMs fechadas ou usuário não encontrado */ }
         setTimeout(async () => {
             const ch = i.guild?.channels.cache.get(ticket.channelId);
             if (ch)
@@ -1120,5 +1137,24 @@ async function selfRoleToggle(i, extra) {
             embeds: [(0, embeds_1.errorEmbed)('Sem Permissão', 'Não foi possível alterar o cargo. Verifique se o bot tem permissão de gerenciar cargos.')],
         });
     }
+}
+// ─── TICKET FEEDBACK BUTTON ───────────────────────────────────────────────────
+async function ticketFeedbackButton(i, star, extra) {
+    const [ticketId, guildId, closedById] = extra;
+    const starNum = parseInt(star);
+    if (isNaN(starNum) || starNum < 1 || starNum > 5)
+        return;
+    const modal = new discord_js_1.ModalBuilder()
+        .setCustomId(`ticket_fb_modal:submit:${ticketId}:${guildId}:${closedById}:${starNum}`)
+        .setTitle(`Avaliação: ${'⭐'.repeat(starNum)} (${starNum}/5)`);
+    const descInput = new discord_js_1.TextInputBuilder()
+        .setCustomId('descricao')
+        .setLabel('Descreva seu atendimento (opcional)')
+        .setStyle(discord_js_1.TextInputStyle.Paragraph)
+        .setRequired(false)
+        .setMaxLength(800)
+        .setPlaceholder('Conte como foi o atendimento. Elogios e sugestões são bem-vindos!');
+    modal.addComponents(new discord_js_1.ActionRowBuilder().addComponents(descInput));
+    await i.showModal(modal);
 }
 //# sourceMappingURL=buttonHandler.js.map

@@ -77,6 +77,7 @@ async function handleModal(i) {
             case 'modal:allowlist_add_manager': return await allowlistAddManager(i);
             case 'modal:allowlist_remove_manager': return await allowlistRemoveManager(i);
             case 'rpg_modal:guild_criar': return await (await Promise.resolve().then(() => __importStar(require('./../rpg/handlers/rpgModalHandler')))).handleRpgModal(i, 'guild_criar');
+            case 'ticket_fb_modal:submit': return await sendTicketFeedback(i, extra);
         }
         // Alliance modals
         if (prefix === 'alliance_modal')
@@ -856,5 +857,44 @@ async function handleCargoMenu(i, action, _parts) {
         await client_1.prisma.selfRoleEntry.delete({ where: { id: entry.id } });
         return i.editReply({ embeds: [new discord_js_1.EmbedBuilder().setColor(0x2ECC71).setDescription(`✅ Cargo removido do menu. Use **📤 Publicar** para atualizar a mensagem em <#${channelId}>.`)] });
     }
+}
+// ─── TICKET FEEDBACK MODAL ────────────────────────────────────────────────────
+async function sendTicketFeedback(i, extra) {
+    const [ticketId, guildId, closedById, starStr] = extra;
+    const star = parseInt(starStr);
+    if (isNaN(star) || star < 1 || star > 5) {
+        return i.reply({ content: '❌ Avaliação inválida.', ephemeral: true });
+    }
+    const descricao = (() => {
+        try {
+            return i.fields.getTextInputValue('descricao').trim() || null;
+        }
+        catch {
+            return null;
+        }
+    })();
+    await i.deferReply({ ephemeral: true });
+    // Busca o guild pelo cliente (interação pode vir de DM)
+    const guild = i.client.guilds.cache.get(guildId) ?? await i.client.guilds.fetch(guildId).catch(() => null);
+    if (!guild)
+        return i.editReply({ content: '❌ Servidor não encontrado.' });
+    const config = await (0, helpers_1.getConfig)(guildId);
+    const channelId = config.feedbackChannelId ?? config.logChannelId;
+    if (!channelId)
+        return i.editReply({ content: '⚠️ Canal de feedback não configurado no servidor.' });
+    const channel = await i.client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased())
+        return i.editReply({ content: '❌ Canal de feedback não encontrado.' });
+    const ticket = await client_1.prisma.ticket.findUnique({ where: { id: ticketId } }).catch(() => null);
+    const filled = '⭐'.repeat(star);
+    const empty = '☆'.repeat(5 - star);
+    const color = star >= 4 ? embeds_1.COLORS.SUCCESS : star >= 3 ? embeds_1.COLORS.WARNING : embeds_1.COLORS.ERROR;
+    const embed = (0, embeds_1.baseEmbed)(color)
+        .setTitle('📝 Feedback de Atendimento')
+        .setAuthor({ name: i.user.username, iconURL: i.user.displayAvatarURL() })
+        .addFields({ name: '👤 Usuário', value: `<@${i.user.id}>`, inline: true }, { name: '🛡️ Atendente', value: ticket?.claimedBy ? `<@${ticket.claimedBy}>` : 'Não assumido', inline: true }, { name: '⭐ Nota', value: `${filled}${empty}  **${star}/5**`, inline: false }, { name: '💬 Comentário', value: descricao ?? '*Sem comentário.*' })
+        .setTimestamp();
+    await channel.send({ embeds: [embed] });
+    await i.editReply({ content: '✅ Feedback enviado. Obrigado pela avaliação!' });
 }
 //# sourceMappingURL=modalHandler.js.map
