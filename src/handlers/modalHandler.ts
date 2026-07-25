@@ -802,8 +802,8 @@ async function sendTicketFeedback(i: ModalSubmitInteraction, extra: string[]) {
   if (!guild) return i.editReply({ content: '❌ Servidor não encontrado.' });
 
   const config = await getConfig(guildId);
-  const channelId = config.feedbackChannelId ?? config.logChannelId;
-  if (!channelId) return i.editReply({ content: '⚠️ Canal de feedback não configurado no servidor.' });
+  const channelId = config.feedbackChannelId;
+  if (!channelId) return i.editReply({ content: '⚠️ Canal de feedback não configurado. Use `/admin` para definir o canal de feedback.' });
 
   const channel = await i.client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
   if (!channel?.isTextBased()) return i.editReply({ content: '❌ Canal de feedback não encontrado.' });
