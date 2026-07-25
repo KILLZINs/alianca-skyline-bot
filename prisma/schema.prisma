@@ -96,7 +96,8 @@ model Ticket {
   category  String    @default("geral")
   status    String    @default("open")
   createdAt DateTime  @default(now())
-  closedAt  DateTime?
+  closedAt        DateTime?
+  voiceChannelId  String?   // Canal de voz da call do ticket
 
   @@map("tickets")
 }
@@ -637,6 +638,7 @@ model AllianceServer {
   class       String   @default("Sem Classe")
   channelId   String?
   inviteLink  String?
+  panelRoleId String?   // Cargo extra que pode acessar /servidor além do dono
   addedBy     String
   addedAt     DateTime @default(now())
   updatedAt   DateTime @updatedAt

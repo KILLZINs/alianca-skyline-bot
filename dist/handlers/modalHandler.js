@@ -84,6 +84,8 @@ async function handleModal(i) {
             return await (await Promise.resolve().then(() => __importStar(require('./allianceHandler')))).handleAllianceModal(i, action);
         if (prefix === 'servidor_modal')
             return await (await Promise.resolve().then(() => __importStar(require('./allianceHandler')))).handleServidorModal(i, action);
+        if (prefix === 'ticket_modal')
+            return await ticketModalHandler(i, action, extra);
         if (prefix === 'embedcfg_modal')
             return await (await Promise.resolve().then(() => __importStar(require('./configHandler')))).handleEmbedCfgModal(i, action);
         if (prefix === 'embeds_modal')
@@ -896,5 +898,58 @@ async function sendTicketFeedback(i, extra) {
         .setTimestamp();
     await channel.send({ embeds: [embed] });
     await i.editReply({ content: '✅ Feedback enviado. Obrigado pela avaliação!' });
+}
+// ─── Modais do Ticket Staff ───────────────────────────────────────────────────
+async function ticketModalHandler(i, action, extra) {
+    if (!i.guild)
+        return i.reply({ embeds: [(0, embeds_1.errorEmbed)('Erro', 'Use em um servidor.')], ephemeral: true });
+    const member = i.member;
+    const config = await (0, helpers_1.getConfig)(i.guild.id);
+    const isMod = i.guild.ownerId === i.user.id
+        || member.permissions.has('ManageGuild')
+        || (config.modRoleId ? member.roles.cache.has(config.modRoleId) : false)
+        || (config.adminRoleId ? member.roles.cache.has(config.adminRoleId) : false);
+    if (!isMod) {
+        const msg = { embeds: [(0, embeds_1.errorEmbed)('Sem Permissão', 'Apenas staff pode usar este painel.')], ephemeral: true };
+        if (i.replied || i.deferred)
+            await i.followUp(msg).catch(() => null);
+        else
+            await i.reply(msg).catch(() => null);
+        return;
+    }
+    await i.deferReply({ ephemeral: true });
+    const getField = (id) => {
+        try {
+            return i.fields.getTextInputValue(id).trim() || null;
+        }
+        catch {
+            return null;
+        }
+    };
+    const ticketId = extra[0];
+    const ticket = await client_1.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket)
+        return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Não encontrado', 'Ticket não encontrado.')] });
+    const rawId = getField('user_id');
+    const userId = rawId?.replace(/[<@!>]/g, '').trim() ?? '';
+    if (!userId)
+        return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('ID inválido', 'Informe um ID ou menção válida.')] });
+    const targetMember = await i.guild.members.fetch(userId).catch(() => null);
+    if (!targetMember)
+        return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Membro não encontrado', `Não encontrei o usuário \`${userId}\` neste servidor.`)] });
+    const ch = i.guild.channels.cache.get(ticket.channelId);
+    if (!ch)
+        return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Canal não encontrado', 'O canal do ticket não foi encontrado.')] });
+    if (action === 'add_member') {
+        await ch.permissionOverwrites.edit(targetMember.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true });
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)('Membro Adicionado', `${targetMember} foi adicionado ao ticket.`)] });
+    }
+    if (action === 'remove_member') {
+        if (targetMember.id === ticket.authorId) {
+            return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Não permitido', 'Não é possível remover o autor do ticket.')] });
+        }
+        await ch.permissionOverwrites.delete(targetMember.id).catch(() => null);
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)('Membro Removido', `${targetMember} foi removido do ticket.`)] });
+    }
 }
 //# sourceMappingURL=modalHandler.js.map

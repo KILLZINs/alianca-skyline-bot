@@ -45,6 +45,8 @@ async function handleSelect(interaction) {
     try {
         if (prefix === 'ticket' && action === 'category')
             return await ticketCategory(interaction);
+        if (prefix === 'ticket_staff' && action === 'action')
+            return await ticketStaffAction(interaction, parts[2]);
         if (prefix === 'rpg_select')
             return await (await Promise.resolve().then(() => __importStar(require('./../rpg/handlers/rpgSelectHandler')))).handleRpgSelect(interaction, action);
         if (prefix === 'selfrole' && action === 'choose')
@@ -97,10 +99,12 @@ async function ticketCategory(i) {
     const ticket = await client_1.prisma.ticket.create({ data: { channelId: ticketCh.id, authorId: user.id, category } });
     const embed = (0, embeds_1.baseEmbed)()
         .setTitle(`${embeds_1.EMOJIS.TICKET} ${labels[category] ?? category}`)
-        .setDescription(`Olá ${user}! Descreva seu problema e aguarde um moderador.\n\n**Categoria:** ${labels[category] ?? category}`)
+        .setDescription(`⚔ Seu **ticket** foi aberto com sucesso, ${user}! Mande uma mensagem explicando melhor o ` +
+        `motivo de você ter aberto o ticket. Após isso, só aguardar alguém da equipe ` +
+        `${config.modRoleId ? `<@&${config.modRoleId}>` : 'suporte'} te atender.`)
         .addFields({ name: '📌 Autor', value: `${user} (${user.id})`, inline: true }, { name: '🏷️ Categoria', value: labels[category] ?? category, inline: true })
         .setTimestamp();
-    const row = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId(`ticket:close:${ticket.id}`).setLabel('Fechar Ticket').setEmoji('🔒').setStyle(discord_js_1.ButtonStyle.Danger), new discord_js_1.ButtonBuilder().setCustomId(`ticket:claim:${ticket.id}`).setLabel('Assumir Ticket').setEmoji('🛡️').setStyle(discord_js_1.ButtonStyle.Primary));
+    const row = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId(`ticket:claim:${ticket.id}`).setLabel('Assumir Ticket').setEmoji('✋').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket:info:${ticket.id}`).setLabel('Informações').setEmoji('ℹ️').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket:painel_staff:${ticket.id}`).setLabel('Painel Staff').setEmoji('⚙️').setStyle(discord_js_1.ButtonStyle.Secondary));
     const ping = config.modRoleId ? `<@&${config.modRoleId}>` : '';
     await ticketCh.send({ content: `${user} ${ping}`.trim(), embeds: [embed], components: [row] });
     if (config.ticketLogChannelId) {
@@ -110,6 +114,109 @@ async function ticketCategory(i) {
         }
     }
     await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Criado!', `Seu ticket foi aberto em ${ticketCh}`)] });
+}
+// ── Ticket Staff Panel ────────────────────────────────────────────────────────
+async function ticketStaffAction(i, ticketId) {
+    // Permission: moderator or admin
+    const member = i.member;
+    const config = await (0, helpers_1.getConfig)(i.guild.id);
+    const isMod = i.guild.ownerId === i.user.id
+        || member.permissions.has('ManageGuild')
+        || (config.modRoleId ? member.roles.cache.has(config.modRoleId) : false)
+        || (config.adminRoleId ? member.roles.cache.has(config.adminRoleId) : false);
+    if (!isMod) {
+        return i.reply({ embeds: [(0, embeds_1.errorEmbed)('Sem Permissão', 'Apenas staff pode usar este painel.')], ephemeral: true });
+    }
+    const action = i.values[0];
+    const ticket = await client_1.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket)
+        return i.reply({ embeds: [(0, embeds_1.errorEmbed)('Não encontrado', 'Ticket não encontrado.')], ephemeral: true });
+    const guild = i.guild;
+    // ── criar_call ────────────────────────────────────────────────────────────────
+    if (action === 'criar_call') {
+        await i.deferReply({ ephemeral: true });
+        if (ticket.voiceChannelId) {
+            const existing = guild.channels.cache.get(ticket.voiceChannelId);
+            if (existing)
+                return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Call Já Existe', `Canal de voz já criado: <#${ticket.voiceChannelId}>`)] });
+        }
+        const textCh = guild.channels.cache.get(ticket.channelId);
+        const voiceCh = await guild.channels.create({
+            name: `📞 call-ticket-${ticket.id.slice(-6)}`,
+            type: discord_js_1.ChannelType.GuildVoice,
+            parent: textCh?.parentId ?? undefined,
+            permissionOverwrites: [
+                { id: guild.id, deny: [discord_js_1.PermissionFlagsBits.ViewChannel] },
+                { id: ticket.authorId, allow: [discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.Connect, discord_js_1.PermissionFlagsBits.Speak] },
+                ...(config.modRoleId ? [{ id: config.modRoleId, allow: [discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.Connect, discord_js_1.PermissionFlagsBits.Speak, discord_js_1.PermissionFlagsBits.MuteMembers] }] : []),
+                ...(config.adminRoleId ? [{ id: config.adminRoleId, allow: [discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.Connect, discord_js_1.PermissionFlagsBits.Speak, discord_js_1.PermissionFlagsBits.MuteMembers] }] : []),
+            ],
+        });
+        await client_1.prisma.ticket.update({ where: { id: ticketId }, data: { voiceChannelId: voiceCh.id } });
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)('Call Criada', `Canal de voz criado: <#${voiceCh.id}>`)] });
+    }
+    // ── deletar_call ──────────────────────────────────────────────────────────────
+    if (action === 'deletar_call') {
+        await i.deferReply({ ephemeral: true });
+        if (!ticket.voiceChannelId)
+            return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Sem Call', 'Não há canal de voz associado a este ticket.')] });
+        const voiceCh = guild.channels.cache.get(ticket.voiceChannelId);
+        if (voiceCh)
+            await voiceCh.delete().catch(() => null);
+        await client_1.prisma.ticket.update({ where: { id: ticketId }, data: { voiceChannelId: null } });
+        return i.editReply({ embeds: [(0, embeds_1.successEmbed)('Call Deletada', 'Canal de voz removido.')] });
+    }
+    // ── adicionar_membro ──────────────────────────────────────────────────────────
+    if (action === 'adicionar_membro') {
+        const { ModalBuilder: MB, TextInputBuilder: TIB, TextInputStyle: TIS, ActionRowBuilder: ARB } = await Promise.resolve().then(() => __importStar(require('discord.js')));
+        const modal = new MB().setCustomId(`ticket_modal:add_member:${ticketId}`).setTitle('Adicionar Membro ao Ticket');
+        modal.addComponents(new ARB().addComponents(new TIB().setCustomId('user_id').setLabel('ID ou menção do usuário').setStyle(TIS.Short).setRequired(true).setPlaceholder('ex: 123456789012345678 ou @usuario')));
+        return i.showModal(modal);
+    }
+    // ── remover_membro ────────────────────────────────────────────────────────────
+    if (action === 'remover_membro') {
+        const { ModalBuilder: MB, TextInputBuilder: TIB, TextInputStyle: TIS, ActionRowBuilder: ARB } = await Promise.resolve().then(() => __importStar(require('discord.js')));
+        const modal = new MB().setCustomId(`ticket_modal:remove_member:${ticketId}`).setTitle('Remover Membro do Ticket');
+        modal.addComponents(new ARB().addComponents(new TIB().setCustomId('user_id').setLabel('ID ou menção do usuário').setStyle(TIS.Short).setRequired(true).setPlaceholder('ex: 123456789012345678 ou @usuario')));
+        return i.showModal(modal);
+    }
+    // ── fechar_ticket ─────────────────────────────────────────────────────────────
+    if (action === 'fechar_ticket') {
+        await i.deferReply({ ephemeral: true });
+        if (ticket.status === 'closed')
+            return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Já Fechado', 'Este ticket já está fechado.')] });
+        await client_1.prisma.ticket.update({ where: { id: ticketId }, data: { status: 'closed', closedAt: new Date() } });
+        if (config.ticketLogChannelId) {
+            const logCh = guild.channels.cache.get(config.ticketLogChannelId);
+            if (logCh)
+                await logCh.send({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.ERROR).setTitle('🎫 Ticket Fechado').addFields({ name: 'Fechado por', value: i.user.tag, inline: true }, { name: 'Canal', value: ticket.channelId, inline: true })] });
+        }
+        // DM de avaliação
+        try {
+            const author = await i.client.users.fetch(ticket.authorId).catch(() => null);
+            if (author) {
+                const dmEmbed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
+                    .setTitle('📝 Como foi seu atendimento?')
+                    .setDescription(`Seu ticket no servidor **${guild.name}** foi encerrado.\n\nAvalie o atendimento clicando em uma das estrelas abaixo.`)
+                    .setFooter({ text: '⚔️ Aliança Skyline' });
+                const { ButtonBuilder: BB, ButtonStyle: BS2, ActionRowBuilder: AR2 } = await Promise.resolve().then(() => __importStar(require('discord.js')));
+                const fbRow = new AR2().addComponents(new BB().setCustomId(`ticket_fb:1:${ticket.id}:${guild.id}:${i.user.id}`).setLabel('⭐').setStyle(BS2.Secondary), new BB().setCustomId(`ticket_fb:2:${ticket.id}:${guild.id}:${i.user.id}`).setLabel('⭐⭐').setStyle(BS2.Secondary), new BB().setCustomId(`ticket_fb:3:${ticket.id}:${guild.id}:${i.user.id}`).setLabel('⭐⭐⭐').setStyle(BS2.Primary), new BB().setCustomId(`ticket_fb:4:${ticket.id}:${guild.id}:${i.user.id}`).setLabel('⭐⭐⭐⭐').setStyle(BS2.Primary), new BB().setCustomId(`ticket_fb:5:${ticket.id}:${guild.id}:${i.user.id}`).setLabel('⭐⭐⭐⭐⭐').setStyle(BS2.Success));
+                await author.send({ embeds: [dmEmbed], components: [fbRow] }).catch(() => null);
+            }
+        }
+        catch { /* DMs fechadas */ }
+        await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Fechado', 'Este canal será deletado em 5 segundos.')] });
+        setTimeout(async () => {
+            if (ticket.voiceChannelId) {
+                const vc = guild.channels.cache.get(ticket.voiceChannelId);
+                if (vc)
+                    await vc.delete().catch(() => null);
+            }
+            const ch = guild.channels.cache.get(ticket.channelId);
+            if (ch)
+                await ch.delete().catch(() => null);
+        }, 5000);
+    }
 }
 // ── Selfrole — toggle legado (backward compat com mensagens antigas) ─────────
 async function selfRoleChoose(i) {

@@ -1,8 +1,10 @@
 import {
   ButtonInteraction, ModalBuilder, TextInputBuilder, TextInputStyle,
   ActionRowBuilder, ModalSubmitInteraction, EmbedBuilder, TextChannel, GuildMember,
+  ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ChannelType, PermissionFlagsBits,
 } from 'discord.js';
 import { prisma } from '../database/client';
+import { getConfig } from '../utils/helpers';
 import { isBotManager } from '../utils/allowlist';
 import { COLORS, successEmbed, errorEmbed, baseEmbed } from '../utils/embeds';
 import {
@@ -232,17 +234,23 @@ export async function handleAliancaButton(i: ButtonInteraction, action: string) 
 export async function handleServidorButton(i: ButtonInteraction, action: string) {
   if (!i.guild) return i.reply({ embeds: [errorEmbed('Erro', 'Use em um servidor.')], ephemeral: true });
 
-  const member   = i.member as GuildMember;
-  const isOwner  = i.guild.ownerId === i.user.id;
-  const isMgr    = member.permissions.has('ManageGuild');
-  if (!isOwner && !isMgr) {
-    return i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas donos ou gerentes do servidor podem usar isso.')], ephemeral: true });
-  }
-
+  const member  = i.member as GuildMember;
   const guildId = i.guild.id;
+
+  // Fetch alliance server first — needed for panelRoleId permission check
   const allianceServer = await prisma.allianceServer.findUnique({ where: { guildId } });
   if (!allianceServer) {
     return i.reply({ embeds: [errorEmbed('Não Cadastrado', 'Este servidor não está na aliança.')], ephemeral: true });
+  }
+
+  const isOwner      = i.guild.ownerId === i.user.id;
+  const isMgr        = member.permissions.has('ManageGuild');
+  const hasPanelRole = allianceServer.panelRoleId
+    ? member.roles.cache.has(allianceServer.panelRoleId)
+    : false;
+
+  if (!isOwner && !isMgr && !hasPanelRole) {
+    return i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas donos, gerentes ou membros com o cargo de acesso podem usar isso.')], ephemeral: true });
   }
 
   switch (action) {
@@ -269,7 +277,6 @@ export async function handleServidorButton(i: ButtonInteraction, action: string)
     case 'performance': {
       await i.deferReply({ ephemeral: true });
 
-      // Stats dos últimos 7 dias
       const now      = new Date();
       const dates7d: string[] = [];
       for (let d = 0; d < 7; d++) {
@@ -298,10 +305,10 @@ export async function handleServidorButton(i: ButtonInteraction, action: string)
         .setTitle(`📊 Desempenho — ${i.guild!.name}`)
         .setThumbnail(i.guild!.iconURL() ?? null)
         .addFields(
-          { name: '🏷️ Classe Atual',      value: `${cls.emoji} **${cls.name}**`,                                          inline: true },
-          { name: '👥 Membros Atual',       value: `**${allianceServer.memberCount.toLocaleString('pt-BR')}**`,             inline: true },
-          { name: '📈 Entradas (7 dias)',    value: `**+${totalJoins7d}**`,                                                 inline: true },
-          { name: '📉 Saídas (7 dias)',      value: `**-${totalLeaves7d}**`,                                                inline: true },
+          { name: '🏷️ Classe Atual',        value: `${cls.emoji} **${cls.name}**`,                                        inline: true },
+          { name: '👥 Membros Atual',         value: `**${allianceServer.memberCount.toLocaleString('pt-BR')}**`,           inline: true },
+          { name: '📈 Entradas (7 dias)',      value: `**+${totalJoins7d}**`,                                               inline: true },
+          { name: '📉 Saídas (7 dias)',        value: `**-${totalLeaves7d}**`,                                              inline: true },
           { name: '📊 Média Diária (Entradas)',value: `**${avgPerDay}**/dia`,                                               inline: true },
           {
             name:  next ? `🚀 Próxima Classe: ${next.cls.emoji} ${next.cls.name}` : '🏆 Classe Máxima!',
@@ -312,6 +319,89 @@ export async function handleServidorButton(i: ButtonInteraction, action: string)
         );
 
       return i.editReply({ embeds: [embed] });
+    }
+
+    case 'stats_server': {
+      await i.deferReply({ ephemeral: true });
+      const g     = i.guild!;
+      const today = new Date().toISOString().slice(0, 10);
+      const [config, stat] = await Promise.all([
+        getConfig(g.id),
+        prisma.serverStat.findUnique({ where: { guildId_date: { guildId: g.id, date: today } } }),
+      ]);
+      const bots = g.members.cache.filter(m => m.user.bot).size;
+      const embed = baseEmbed(COLORS.INFO)
+        .setTitle(`📊 ${g.name} — Estatísticas`)
+        .setThumbnail(g.iconURL() ?? null)
+        .addFields(
+          { name: '👥 Membros',          value: `**${g.memberCount}** (${bots} bots)`,                                      inline: true },
+          { name: '💬 Canais',           value: `**${g.channels.cache.size}**`,                                              inline: true },
+          { name: '🎭 Cargos',           value: `**${g.roles.cache.size}**`,                                                 inline: true },
+          { name: '😀 Emojis',           value: `**${g.emojis.cache.size}**`,                                                inline: true },
+          { name: '🚀 Boosts',           value: `**${g.premiumSubscriptionCount ?? 0}** (Tier ${g.premiumTier})`,           inline: true },
+          { name: '📅 Criado em',        value: `<t:${Math.floor(g.createdTimestamp / 1000)}:D>`,                            inline: true },
+          { name: '👑 Dono',             value: `<@${g.ownerId}>`,                                                           inline: true },
+          { name: '📋 Canal de Logs',    value: config.logChannelId ? `<#${config.logChannelId}>` : 'Não configurado',       inline: true },
+          { name: '📈 Hoje — Entradas',  value: `**${stat?.joins ?? 0}**`,                                                   inline: true },
+          { name: '📉 Hoje — Saídas',    value: `**${stat?.leaves ?? 0}**`,                                                  inline: true },
+          { name: '🔨 Hoje — Bans',      value: `**${stat?.bans ?? 0}**`,                                                    inline: true },
+          { name: '💬 Hoje — Mensagens', value: `**${(stat?.messages ?? 0).toLocaleString('pt-BR')}**`,                      inline: true },
+        )
+        .setFooter({ text: '⚔️ Aliança Skyline' })
+        .setTimestamp();
+      return i.editReply({ embeds: [embed] });
+    }
+
+    case 'rede': {
+      await i.deferReply({ ephemeral: true });
+      const today  = new Date().toISOString().slice(0, 10);
+      const guilds = i.client.guilds.cache;
+      const gIds   = [...guilds.keys()];
+      const stats  = await prisma.serverStat.findMany({ where: { guildId: { in: gIds }, date: today } });
+      const stMap  = new Map(stats.map(s => [s.guildId, s]));
+      let totalH = 0, totalB = 0, totalJ = 0, totalL = 0, totalBans = 0, totalM = 0;
+      const lines: string[] = [];
+      for (const [id, g] of guilds) {
+        const bots   = g.members.cache.filter(m => m.user.bot).size;
+        const humans = g.memberCount - bots;
+        const s      = stMap.get(id);
+        totalH += humans; totalB += bots;
+        totalJ += s?.joins ?? 0; totalL += s?.leaves ?? 0;
+        totalBans += s?.bans ?? 0; totalM += s?.messages ?? 0;
+        lines.push(`**${g.name}** — ${g.memberCount} membros${s ? ` • +${s.joins}/-${s.leaves}/${s.bans}🔨` : ''}`);
+      }
+      const embed = baseEmbed(COLORS.DARK)
+        .setTitle(`🌐 Rede Aliança Skyline — ${guilds.size} servidor(es)`)
+        .addFields(
+          { name: '👥 Total membros',    value: `**${(totalH + totalB).toLocaleString('pt-BR')}** (${totalB} bots)`, inline: true },
+          { name: '📈 Hoje — Entradas',  value: `**${totalJ}**`,                                                     inline: true },
+          { name: '📉 Hoje — Saídas',    value: `**${totalL}**`,                                                     inline: true },
+          { name: '🔨 Hoje — Bans',      value: `**${totalBans}**`,                                                  inline: true },
+          { name: '💬 Hoje — Mensagens', value: `**${totalM.toLocaleString('pt-BR')}**`,                              inline: true },
+          { name: '📋 Servidores',        value: lines.join('\n') || '*Nenhum*',                                       inline: false },
+        )
+        .setFooter({ text: '⚔️ Aliança Skyline — Rede Interna' })
+        .setTimestamp();
+      return i.editReply({ embeds: [embed] });
+    }
+
+    case 'set_panel_role': {
+      // Only server owner can change the access role
+      if (!isOwner) {
+        return i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas o dono do servidor pode definir o cargo de acesso.')], ephemeral: true });
+      }
+      const modal = new ModalBuilder().setCustomId('servidor_modal:set_panel_role').setTitle('Definir Cargo de Acesso');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('role_id')
+            .setLabel('ID do Cargo (vazio = remover)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setPlaceholder('ex: 111222333444555666 (deixe vazio para remover)'),
+        ),
+      );
+      return i.showModal(modal);
     }
   }
 }
@@ -478,10 +568,16 @@ export async function handleServidorModal(i: ModalSubmitInteraction, action: str
   if (!i.guild) return i.reply({ embeds: [errorEmbed('Erro', 'Use em um servidor.')], ephemeral: true });
 
   const member  = i.member as GuildMember;
-  const isOwner = i.guild.ownerId === i.user.id;
-  const isMgr   = member.permissions.has('ManageGuild');
-  if (!isOwner && !isMgr) {
-    return i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas donos ou gerentes do servidor.')], ephemeral: true });
+  const guildId = i.guild.id;
+  const server  = await prisma.allianceServer.findUnique({ where: { guildId } });
+  if (!server) return i.reply({ embeds: [errorEmbed('Não Cadastrado', 'Servidor não está na aliança.')], ephemeral: true });
+
+  const isOwner      = i.guild.ownerId === i.user.id;
+  const isMgr        = member.permissions.has('ManageGuild');
+  const hasPanelRole = server.panelRoleId ? member.roles.cache.has(server.panelRoleId) : false;
+
+  if (!isOwner && !isMgr && !hasPanelRole) {
+    return i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas donos, gerentes ou membros com o cargo de acesso.')], ephemeral: true });
   }
 
   await i.deferReply({ ephemeral: true });
@@ -489,10 +585,6 @@ export async function handleServidorModal(i: ModalSubmitInteraction, action: str
   const getField = (id: string) => {
     try { return i.fields.getTextInputValue(id).trim() || null; } catch { return null; }
   };
-
-  const guildId = i.guild.id;
-  const server  = await prisma.allianceServer.findUnique({ where: { guildId } });
-  if (!server) return i.editReply({ embeds: [errorEmbed('Não Cadastrado', 'Servidor não está na aliança.')] });
 
   switch (action) {
     case 'set_channel': {
@@ -512,6 +604,25 @@ export async function handleServidorModal(i: ModalSubmitInteraction, action: str
 
       await prisma.allianceServer.update({ where: { guildId }, data: { inviteLink: invite } });
       return i.editReply({ embeds: [successEmbed('Link Definido', `Link de convite salvo:\n${invite}`)] });
+    }
+
+    case 'set_panel_role': {
+      // Only server owner can change the access role
+      if (!isOwner) {
+        return i.editReply({ embeds: [errorEmbed('Sem Permissão', 'Apenas o dono do servidor pode definir o cargo de acesso.')] });
+      }
+      const rawId  = getField('role_id');
+      const roleId = rawId?.replace(/[<@&>]/g, '').trim() || null;
+
+      if (roleId) {
+        const role = i.guild.roles.cache.get(roleId);
+        if (!role) return i.editReply({ embeds: [errorEmbed('Cargo não encontrado', `Cargo \`${roleId}\` não encontrado neste servidor.`)] });
+        await prisma.allianceServer.update({ where: { guildId }, data: { panelRoleId: roleId } });
+        return i.editReply({ embeds: [successEmbed('Cargo Definido', `O cargo <@&${roleId}> agora pode acessar o painel /servidor.`)] });
+      } else {
+        await prisma.allianceServer.update({ where: { guildId }, data: { panelRoleId: null } });
+        return i.editReply({ embeds: [successEmbed('Cargo Removido', 'Cargo de acesso removido. Apenas donos e ManageGuild podem usar /servidor.')] });
+      }
     }
   }
 }

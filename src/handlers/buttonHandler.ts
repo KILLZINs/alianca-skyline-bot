@@ -243,7 +243,7 @@ async function painelButtons(i: ButtonInteraction, action: string) {
       );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('painel:rede').setLabel('Rede Aliança').setEmoji('🌐').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('refresh:servidor').setLabel('Atualizar').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+
     );
     return i.editReply({ embeds: [embed], components: [row] });
   }
@@ -897,7 +897,7 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
 
     await prisma.ticket.update({ where: { id: ticketId }, data: { claimedBy: i.user.id } });
 
-    // Desabilitar o botão "Assumir" na mensagem original do ticket
+    // Atualizar botão de claim para mostrar nome do atendente
     try {
       const ch = i.channel as TextChannel | null;
       if (ch) {
@@ -916,7 +916,7 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
                 .map((c: any) => {
                   const btn = ButtonBuilder.from(c);
                   if (c.customId === `ticket:claim:${ticketId}`) {
-                    btn.setDisabled(true).setLabel('✅ Assumido').setStyle(ButtonStyle.Secondary);
+                    btn.setDisabled(true).setLabel(`Atendido por ${i.user.username}`).setStyle(ButtonStyle.Success);
                   }
                   return btn;
                 })
@@ -930,6 +930,66 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
     await i.editReply({ embeds: [successEmbed('Ticket Assumido', 'Você assumiu este ticket.')] });
     const ch = i.channel as TextChannel | null;
     if (ch) await ch.send({ embeds: [baseEmbed(COLORS.INFO).setDescription(`${EMOJIS.SHIELD} Ticket assumido por ${i.user}.`)] });
+  }
+
+  if (action === 'info') {
+    const [ticketId] = extra;
+    await i.deferReply({ ephemeral: true });
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Ticket não encontrado.')] });
+
+    const [author, claimer] = await Promise.all([
+      i.client.users.fetch(ticket.authorId).catch(() => null),
+      ticket.claimedBy ? i.client.users.fetch(ticket.claimedBy).catch(() => null) : Promise.resolve(null),
+    ]);
+    const ch2 = i.guild?.channels.cache.get(ticket.channelId) as TextChannel | undefined;
+    const participants = ch2
+      ? ch2.permissionOverwrites.cache.filter(po => po.type === 1 /* member override */).size
+      : 0;
+
+    const labels: Record<string, string> = {
+      suporte: 'Suporte Geral', parceria: 'Parceria',
+      reporte: 'Reporte', candidatura: 'Candidatura', outro: 'Outro',
+    };
+    const createdTs = Math.floor(ticket.createdAt.getTime() / 1000);
+    const elapsed   = formatDuration(Date.now() - ticket.createdAt.getTime());
+
+    const embed = baseEmbed(ticket.status === 'open' ? COLORS.SUCCESS : COLORS.ERROR)
+      .setTitle('ℹ️ Informações do Ticket')
+      .setDescription('Resumo rápido deste atendimento.')
+      .addFields(
+        { name: '</> Identificação', value: `• **ID:** ${ticket.id.slice(-6).toUpperCase()}\n• **Status:** ${ticket.status === 'open' ? '🟢 Aberto' : '🔴 Fechado'}\n• **Tipo:** Canal`, inline: false },
+        { name: '👤 Pessoas',        value: `• **Aberto por:** ${author ? `@${author.username}` : ticket.authorId}\n• **Atendido por:** ${claimer ? `@${claimer.username}` : '*Ninguém ainda*'}\n• **Participantes:** ${participants}`, inline: false },
+        { name: '📋 Detalhes',       value: `• **Criado em:** <t:${createdTs}:F>\n• **Tempo:** ${elapsed}\n• **Opção:** ${labels[ticket.category] ?? ticket.category}`, inline: false },
+      )
+      .setFooter({ text: '⚔️ Aliança Skyline' });
+
+    return i.editReply({ embeds: [embed] });
+  }
+
+  if (action === 'painel_staff') {
+    const [ticketId] = extra;
+    if (!(await checkModerator(i))) return;
+    await i.deferReply({ ephemeral: true });
+
+    const embed = baseEmbed(COLORS.DARK)
+      .setTitle('🔧 Painel do Staff')
+      .setDescription('Gerencie este ticket com as opções abaixo.');
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`ticket_staff:action:${ticketId}`)
+        .setPlaceholder('Selecione uma ação...')
+        .addOptions(
+          new StringSelectMenuOptionBuilder().setLabel('Criar Call')       .setValue('criar_call')      .setEmoji('📞').setDescription('Cria um canal de voz para este ticket'),
+          new StringSelectMenuOptionBuilder().setLabel('Deletar Call')     .setValue('deletar_call')    .setEmoji('🗑️').setDescription('Remove o canal de voz do ticket'),
+          new StringSelectMenuOptionBuilder().setLabel('Adicionar Membro') .setValue('adicionar_membro').setEmoji('➕').setDescription('Adiciona um membro ao ticket'),
+          new StringSelectMenuOptionBuilder().setLabel('Remover Membro')   .setValue('remover_membro')  .setEmoji('➖').setDescription('Remove um membro do ticket'),
+          new StringSelectMenuOptionBuilder().setLabel('Fechar Ticket')    .setValue('fechar_ticket')   .setEmoji('🔒').setDescription('Fecha e encerra este ticket'),
+        )
+    );
+
+    return i.editReply({ embeds: [embed], components: [row] });
   }
 }
 
@@ -1199,38 +1259,6 @@ async function refreshButtons(i: ButtonInteraction, action: string) {
     return i.update({ embeds: [embed], components: [row] });
   }
 
-  if (action === 'servidor') {
-    const today = new Date().toISOString().slice(0, 10);
-    const [totalMembers, config, stat] = await Promise.all([
-      prisma.member.count(),
-      getConfig(guild.id),
-      prisma.serverStat.findUnique({ where: { guildId_date: { guildId: guild.id, date: today } } }),
-    ]);
-    const bots = guild.members.cache.filter(m => m.user.bot).size;
-    const embed = baseEmbed(COLORS.INFO)
-      .setTitle(`${EMOJIS.CHART} ${guild.name}`)
-      .setThumbnail(guild.iconURL() ?? null)
-      .addFields(
-        { name: '👥 Membros', value: `**${guild.memberCount}** (${bots} bots)`, inline: true },
-        { name: '📊 No banco', value: `**${totalMembers}**`, inline: true },
-        { name: '💬 Canais', value: `**${guild.channels.cache.size}**`, inline: true },
-        { name: '🎭 Cargos', value: `**${guild.roles.cache.size}**`, inline: true },
-        { name: '😀 Emojis', value: `**${guild.emojis.cache.size}**`, inline: true },
-        { name: '🚀 Boosts', value: `**${guild.premiumSubscriptionCount ?? 0}** (Tier ${guild.premiumTier})`, inline: true },
-        { name: '📅 Criado em', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true },
-        { name: '👑 Dono', value: `<@${guild.ownerId}>`, inline: true },
-        { name: '📋 Log', value: config.logChannelId ? `<#${config.logChannelId}>` : 'Não configurado', inline: true },
-        { name: '📈 Hoje — Entradas', value: `**${stat?.joins ?? 0}**`, inline: true },
-        { name: '📉 Hoje — Saídas',   value: `**${stat?.leaves ?? 0}**`, inline: true },
-        { name: '🔨 Hoje — Bans',     value: `**${stat?.bans ?? 0}**`, inline: true },
-        { name: '💬 Hoje — Mensagens', value: `**${(stat?.messages ?? 0).toLocaleString('pt-BR')}**`, inline: true },
-      );
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('painel:rede').setLabel('Rede Aliança').setEmoji('🌐').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('refresh:servidor').setLabel('Atualizar').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-    );
-    return i.update({ embeds: [embed], components: [row] });
-  }
 
   if (action === 'rede') {
     const today = new Date().toISOString().slice(0, 10);
