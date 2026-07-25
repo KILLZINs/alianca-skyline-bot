@@ -627,19 +627,21 @@ async function ticketButtons(i, action, extra) {
                 await ch.send({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.ERROR).setTitle('🎫 Ticket Fechado').addFields({ name: 'Fechado por', value: `${i.user.tag}`, inline: true }, { name: 'Canal', value: `${ticket.channelId}`, inline: true })] });
         }
         await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Fechado', 'Este canal será deletado em 5 segundos.')] });
-        // ── DM de avaliação para o autor do ticket ────────────────────────────
+        // ── DM de avaliação para quem assumiu o ticket ───────────────────────
         try {
-            const author = await i.client.users.fetch(ticket.authorId).catch(() => null);
-            if (author && author.id !== i.user.id) {
-                const guildId = i.guild.id;
-                const closedById = i.user.id;
-                const dmEmbed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
-                    .setTitle('📝 Como foi seu atendimento?')
-                    .setDescription(`Seu ticket no servidor **${i.guild.name}** foi encerrado.\n\n` +
-                    'Avalie o atendimento clicando em uma das estrelas abaixo. Sua opinião é importante para nós.')
-                    .setFooter({ text: '⚔️ Aliança Skyline • Um formulário será aberto após a sua escolha' });
-                const row = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:1:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:2:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:3:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:4:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:5:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Success));
-                await author.send({ embeds: [dmEmbed], components: [row] }).catch(() => null);
+            if (ticket.claimedBy) {
+                const claimer = await i.client.users.fetch(ticket.claimedBy).catch(() => null);
+                if (claimer) {
+                    const guildId = i.guild.id;
+                    const closedById = i.user.id;
+                    const dmEmbed = (0, embeds_1.baseEmbed)(embeds_1.COLORS.PRIMARY)
+                        .setTitle('📝 Registro de Atendimento')
+                        .setDescription(`Você encerrou o ticket de <@${ticket.authorId}> no servidor **${i.guild.name}**.\n\n` +
+                        'Avalie o atendimento prestado clicando em uma das estrelas abaixo.')
+                        .setFooter({ text: '⚔️ Aliança Skyline • Um formulário será aberto após a sua escolha' });
+                    const row = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:1:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:2:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐').setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:3:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:4:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder().setCustomId(`ticket_fb:5:${ticket.id}:${guildId}:${closedById}`).setLabel('⭐⭐⭐⭐⭐').setStyle(discord_js_1.ButtonStyle.Success));
+                    await claimer.send({ embeds: [dmEmbed], components: [row] }).catch(() => null);
+                }
             }
         }
         catch { /* DMs fechadas ou usuário não encontrado */ }
@@ -654,8 +656,36 @@ async function ticketButtons(i, action, extra) {
         if (!(await (0, permissions_1.checkModerator)(i)))
             return;
         await i.deferReply({ ephemeral: true });
+        const ticket = await client_1.prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket)
+            return i.editReply({ embeds: [(0, embeds_1.errorEmbed)('Não encontrado', 'Ticket não encontrado.')] });
+        if (ticket.claimedBy) {
+            return i.editReply({ embeds: [(0, embeds_1.warningEmbed)('Já assumido', `Este ticket já foi assumido por <@${ticket.claimedBy}>.`)] });
+        }
         await client_1.prisma.ticket.update({ where: { id: ticketId }, data: { claimedBy: i.user.id } });
-        await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Assumido', `Você assumiu este ticket.`)] });
+        // Desabilitar o botão "Assumir" na mensagem original do ticket
+        try {
+            const ch = i.channel;
+            if (ch) {
+                const messages = await ch.messages.fetch({ limit: 15 });
+                const ticketMsg = messages.find(m => m.components.some((row) => row.components.some((c) => c.type === discord_js_1.ComponentType.Button && c.customId === `ticket:claim:${ticketId}`)));
+                if (ticketMsg) {
+                    const rawRows = ticketMsg.components;
+                    const newRows = rawRows.map((row) => new discord_js_1.ActionRowBuilder().addComponents(row.components
+                        .filter((c) => c.type === discord_js_1.ComponentType.Button)
+                        .map((c) => {
+                        const btn = discord_js_1.ButtonBuilder.from(c);
+                        if (c.customId === `ticket:claim:${ticketId}`) {
+                            btn.setDisabled(true).setLabel('✅ Assumido').setStyle(discord_js_1.ButtonStyle.Secondary);
+                        }
+                        return btn;
+                    })));
+                    await ticketMsg.edit({ components: newRows });
+                }
+            }
+        }
+        catch { /* ignora erro ao editar mensagem */ }
+        await i.editReply({ embeds: [(0, embeds_1.successEmbed)('Ticket Assumido', 'Você assumiu este ticket.')] });
         const ch = i.channel;
         if (ch)
             await ch.send({ embeds: [(0, embeds_1.baseEmbed)(embeds_1.COLORS.INFO).setDescription(`${embeds_1.EMOJIS.SHIELD} Ticket assumido por ${i.user}.`)] });

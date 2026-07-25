@@ -890,9 +890,9 @@ async function sendTicketFeedback(i, extra) {
     const empty = '☆'.repeat(5 - star);
     const color = star >= 4 ? embeds_1.COLORS.SUCCESS : star >= 3 ? embeds_1.COLORS.WARNING : embeds_1.COLORS.ERROR;
     const embed = (0, embeds_1.baseEmbed)(color)
-        .setTitle('📝 Feedback de Atendimento')
+        .setTitle('📝 Registro de Atendimento')
         .setAuthor({ name: i.user.username, iconURL: i.user.displayAvatarURL() })
-        .addFields({ name: '👤 Usuário', value: `<@${i.user.id}>`, inline: true }, { name: '🛡️ Atendente', value: ticket?.claimedBy ? `<@${ticket.claimedBy}>` : 'Não assumido', inline: true }, { name: '⭐ Nota', value: `${filled}${empty}  **${star}/5**`, inline: false }, { name: '💬 Comentário', value: descricao ?? '*Sem comentário.*' })
+        .addFields({ name: '🛡️ Atendente', value: `<@${i.user.id}>`, inline: true }, { name: '🎫 Ticket de', value: ticket?.authorId ? `<@${ticket.authorId}>` : 'Desconhecido', inline: true }, { name: '⭐ Nota', value: `${filled}${empty}  **${star}/5**`, inline: false }, { name: '💬 Anotações', value: descricao ?? '*Sem anotações.*' })
         .setTimestamp();
     await channel.send({ embeds: [embed] });
     await i.editReply({ content: '✅ Feedback enviado. Obrigado pela avaliação!' });
