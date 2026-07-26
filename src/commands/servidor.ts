@@ -3,9 +3,44 @@ import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember,
 } from 'discord.js';
 import { Command } from '../types';
-import { COLORS, errorEmbed } from '../utils/embeds';
+import { errorEmbed } from '../utils/embeds';
 import { prisma } from '../database/client';
 import { getServerClass, getNextClass } from '../utils/alliance';
+
+const SKYLINE_PURPLE = 0x470F78;
+
+const PANEL_EMOJIS = {
+  title: '💀',
+  currentClass: '🕸️',
+  members: '🦴',
+  channel: '⚓',
+  invite: '🔗',
+  accessRole: '⛓️',
+  nextClass: '🌪️',
+  maxClass: '🎱',
+  footer: '🖤',
+  buttons: {
+    channel: '⚓',
+    invite: '🔗',
+    accessRole: '⛓️',
+    stats: '🎚️',
+    network: '☁️',
+    performance: '⚙️',
+  },
+  classes: {
+    Cosmos: '🕸️',
+    Galaxy: '🌪️',
+    Nebula: '☁️',
+    Starlight: '🕷️',
+    Moonlight: '💜',
+    Cloud: '🖤',
+    'Sem Classe': '🦴',
+  },
+} as const;
+
+function panelClassEmoji(className: string): string {
+  return PANEL_EMOJIS.classes[className as keyof typeof PANEL_EMOJIS.classes] ?? PANEL_EMOJIS.currentClass;
+}
 
 export default {
   category: 'alianca',
@@ -45,38 +80,40 @@ export default {
 
     const cls  = getServerClass(allianceServer.memberCount ?? interaction.guild.memberCount);
     const next = getNextClass(allianceServer.memberCount ?? interaction.guild.memberCount);
+    const clsEmoji = panelClassEmoji(cls.name);
+    const nextEmoji = next ? panelClassEmoji(next.cls.name) : null;
 
     const embed = new EmbedBuilder()
-      .setColor(cls.color)
-      .setTitle(`${cls.emoji} ${interaction.guild.name} — Painel do Servidor`)
+      .setColor(SKYLINE_PURPLE)
+      .setTitle(`${PANEL_EMOJIS.title} ${interaction.guild.name} — Painel do Servidor`)
       .setThumbnail(interaction.guild.iconURL() ?? null)
       .addFields(
-        { name: '🏷️ Classe Atual',   value: `${cls.emoji} **${cls.name}**`,                                                                          inline: true },
-        { name: '👥 Membros',         value: `**${(allianceServer.memberCount ?? interaction.guild.memberCount).toLocaleString('pt-BR')}**`,            inline: true },
-        { name: '📌 Canal Aliança',   value: allianceServer.channelId  ? `<#${allianceServer.channelId}>`                          : '*Não configurado*', inline: true },
-        { name: '🔗 Link de Convite', value: allianceServer.inviteLink ? `[Clique aqui](${allianceServer.inviteLink})`             : '*Não configurado*', inline: true },
-        { name: '🔑 Cargo de Acesso', value: allianceServer.panelRoleId ? `<@&${allianceServer.panelRoleId}>` : '*Apenas dono / ManageGuild*',          inline: true },
+        { name: `${PANEL_EMOJIS.currentClass} Classe Atual`,   value: `${clsEmoji} **${cls.name}**`,                                                                          inline: true },
+        { name: `${PANEL_EMOJIS.members} Membros`,         value: `**${(allianceServer.memberCount ?? interaction.guild.memberCount).toLocaleString('pt-BR')}**`,            inline: true },
+        { name: `${PANEL_EMOJIS.channel} Canal Aliança`,   value: allianceServer.channelId  ? `<#${allianceServer.channelId}>`                          : '*Não configurado*', inline: true },
+        { name: `${PANEL_EMOJIS.invite} Link de Convite`, value: allianceServer.inviteLink ? `[Clique aqui](${allianceServer.inviteLink})`             : '*Não configurado*', inline: true },
+        { name: `${PANEL_EMOJIS.accessRole} Cargo de Acesso`, value: allianceServer.panelRoleId ? `<@&${allianceServer.panelRoleId}>` : '*Apenas dono / ManageGuild*',          inline: true },
         {
-          name:  next ? `📈 Próxima Classe: ${next.cls.emoji} ${next.cls.name}` : '🏆 Classe Máxima',
+          name:  next ? `${PANEL_EMOJIS.nextClass} Próxima Classe: ${nextEmoji} ${next.cls.name}` : `${PANEL_EMOJIS.maxClass} Classe Máxima`,
           value: next ? `Faltam **${next.needed.toLocaleString('pt-BR')}** membros` : 'Você está no topo da aliança!',
           inline: false,
         },
       )
-      .setFooter({ text: '⚔️ Aliança Skyline' })
+      .setFooter({ text: `${PANEL_EMOJIS.footer} Aliança Skyline` })
       .setTimestamp();
 
     // Linha 1 — configurações do servidor na aliança
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('servidor:set_channel')  .setLabel('Canal Aliança') .setEmoji('📌').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('servidor:set_invite')   .setLabel('Link Convite')  .setEmoji('🔗').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('servidor:set_panel_role').setLabel('Cargo Acesso') .setEmoji('🔑').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('servidor:set_channel')  .setLabel('Canal Aliança') .setEmoji(PANEL_EMOJIS.buttons.channel).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('servidor:set_invite')   .setLabel('Link Convite')  .setEmoji(PANEL_EMOJIS.buttons.invite).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('servidor:set_panel_role').setLabel('Cargo Acesso') .setEmoji(PANEL_EMOJIS.buttons.accessRole).setStyle(ButtonStyle.Secondary),
     );
 
     // Linha 2 — visualizações (movidas do /painel)
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('servidor:stats_server').setLabel('Estatísticas').setEmoji('📊').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('servidor:rede')        .setLabel('Rede Aliança').setEmoji('🌐').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('servidor:performance') .setLabel('Desempenho')  .setEmoji('📈').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('servidor:stats_server').setLabel('Estatísticas').setEmoji(PANEL_EMOJIS.buttons.stats).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('servidor:rede')        .setLabel('Rede Aliança').setEmoji(PANEL_EMOJIS.buttons.network).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('servidor:performance') .setLabel('Desempenho')  .setEmoji(PANEL_EMOJIS.buttons.performance).setStyle(ButtonStyle.Secondary),
     );
 
     await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
