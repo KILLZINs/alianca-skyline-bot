@@ -21,6 +21,20 @@ export const SERVER_CLASSES: ServerClass[] = [
   { name: 'Cloud',    emoji: '☁️', color: 0x4A235A, minMembers: 100   },
 ];
 
+const PANEL_CLASS_EMOJIS: Record<string, string> = {
+  Cosmos: '🕸️',
+  Galaxy: '🌪️',
+  Nebula: '☁️',
+  Starlight: '🕷️',
+  Moonlight: '💭',
+  Cloud: '🖤',
+  'Sem Classe': '🦴',
+};
+
+export function getAlliancePanelEmoji(className: string): string {
+  return PANEL_CLASS_EMOJIS[className] ?? PANEL_CLASS_EMOJIS['Sem Classe'];
+}
+
 export function getServerClass(memberCount: number): ServerClass {
   for (const cls of SERVER_CLASSES) {
     if (memberCount >= cls.minMembers) return cls;
@@ -45,6 +59,15 @@ export async function getAllianceServers() {
 
 export async function isAllianceServer(guildId: string): Promise<boolean> {
   return !!(await prisma.allianceServer.findUnique({ where: { guildId } }));
+}
+
+export async function isAllianceServerRepresentative(guildId: string, userId: string): Promise<boolean> {
+  const member = await prisma.allianceServerMember.findUnique({
+    where: { guildId_userId: { guildId, userId } },
+    select: { role: true },
+  });
+
+  return member?.role === 'owner' || member?.role === 'representative';
 }
 
 // ─── Constrói embed oficial da aliança ────────────────────────────────────────

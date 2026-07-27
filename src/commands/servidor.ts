@@ -1,11 +1,11 @@
 import {
   SlashCommandBuilder, ChatInputCommandInteraction,
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember,
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from 'discord.js';
 import { Command } from '../types';
 import { errorEmbed } from '../utils/embeds';
 import { prisma } from '../database/client';
-import { getServerClass, getNextClass } from '../utils/alliance';
+import { getServerClass, getNextClass, getAlliancePanelEmoji, isAllianceServerRepresentative } from '../utils/alliance';
 
 const SKYLINE_PURPLE = 0x470F78;
 
@@ -15,31 +15,20 @@ const PANEL_EMOJIS = {
   members: '🦴',
   channel: '⚓',
   invite: '🔗',
-  accessRole: '⛓️',
   nextClass: '🌪️',
   maxClass: '🎱',
   footer: '🖤',
   buttons: {
     channel: '⚓',
     invite: '🔗',
-    accessRole: '⛓️',
     stats: '🎚️',
     network: '☁️',
     performance: '⚙️',
   },
-  classes: {
-    Cosmos: '🕸️',
-    Galaxy: '🌪️',
-    Nebula: '☁️',
-    Starlight: '🕷️',
-    Moonlight: '💜',
-    Cloud: '🖤',
-    'Sem Classe': '🦴',
-  },
 } as const;
 
 function panelClassEmoji(className: string): string {
-  return PANEL_EMOJIS.classes[className as keyof typeof PANEL_EMOJIS.classes] ?? PANEL_EMOJIS.currentClass;
+  return getAlliancePanelEmoji(className);
 }
 
 export default {
@@ -53,20 +42,15 @@ export default {
       return interaction.reply({ embeds: [errorEmbed('Erro', 'Use em um servidor.')], ephemeral: true });
     }
 
-    const member   = interaction.member as GuildMember;
     const guildId  = interaction.guild.id;
     const isOwner  = interaction.guild.ownerId === interaction.user.id;
-    const isMgr    = member.permissions.has('ManageGuild');
 
-    // Fetch alliance server upfront — necessário para verificar panelRoleId
     const allianceServer = await prisma.allianceServer.findUnique({ where: { guildId } });
-    const hasPanelRole   = allianceServer?.panelRoleId
-      ? member.roles.cache.has(allianceServer.panelRoleId)
-      : false;
+    const isRepresentative = await isAllianceServerRepresentative(guildId, interaction.user.id);
 
-    if (!isOwner && !isMgr && !hasPanelRole) {
+    if (!isOwner && !isRepresentative) {
       return interaction.reply({
-        embeds: [errorEmbed('Sem Permissão', 'Apenas donos, gerentes do servidor ou membros com o cargo de acesso podem usar este painel.')],
+        embeds: [errorEmbed('Sem Permissão', 'Apenas o dono do servidor ou representantes definidos em `/alianca` podem usar este painel.')],
         ephemeral: true,
       });
     }
@@ -92,7 +76,6 @@ export default {
         { name: `${PANEL_EMOJIS.members} Membros`,         value: `**${(allianceServer.memberCount ?? interaction.guild.memberCount).toLocaleString('pt-BR')}**`,            inline: true },
         { name: `${PANEL_EMOJIS.channel} Canal Aliança`,   value: allianceServer.channelId  ? `<#${allianceServer.channelId}>`                          : '*Não configurado*', inline: true },
         { name: `${PANEL_EMOJIS.invite} Link de Convite`, value: allianceServer.inviteLink ? `[Clique aqui](${allianceServer.inviteLink})`             : '*Não configurado*', inline: true },
-        { name: `${PANEL_EMOJIS.accessRole} Cargo de Acesso`, value: allianceServer.panelRoleId ? `<@&${allianceServer.panelRoleId}>` : '*Apenas dono / ManageGuild*',          inline: true },
         {
           name:  next ? `${PANEL_EMOJIS.nextClass} Próxima Classe: ${nextEmoji} ${next.cls.name}` : `${PANEL_EMOJIS.maxClass} Classe Máxima`,
           value: next ? `Faltam **${next.needed.toLocaleString('pt-BR')}** membros` : 'Você está no topo da aliança!',
@@ -106,7 +89,6 @@ export default {
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('servidor:set_channel')  .setLabel('Canal Aliança') .setEmoji(PANEL_EMOJIS.buttons.channel).setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('servidor:set_invite')   .setLabel('Link Convite')  .setEmoji(PANEL_EMOJIS.buttons.invite).setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('servidor:set_panel_role').setLabel('Cargo Acesso') .setEmoji(PANEL_EMOJIS.buttons.accessRole).setStyle(ButtonStyle.Secondary),
     );
 
     // Linha 2 — visualizações (movidas do /painel)
