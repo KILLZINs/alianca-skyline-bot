@@ -4,7 +4,7 @@
     "description": "Bot oficial da Aliança Skyline para Discord - v2 com painéis",
     "main": "dist/index.js",
     "scripts": {
-      "build": "tsc || true",
+      "build": "tsc || true && node dist/deploy-commands.js",
       "start": "node dist/index.js",
       "dev": "ts-node src/index.ts",
       "deploy": "ts-node src/deploy-commands.ts",
@@ -29,4 +29,3 @@
       "typescript": "^5.3.2"
     }
     }
-    
