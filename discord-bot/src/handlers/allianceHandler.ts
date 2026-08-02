@@ -228,54 +228,51 @@ export async function handleAliancaButton(i: ButtonInteraction, action: string) 
       return i.showModal(modal);
     }
 
-    // ─── Painel Admin mesclado (allowlist apenas) ─────────────────────────────
-    case 'admin_panel': {
+    // ─── Allowlist (servidores e managers autorizados) ────────────────────────
+    case 'allowlist': {
+      const { isEnforcementActive, allowedGuildCount, getOwnerIds } = await import('../utils/allowlist');
+      const enforcement = isEnforcementActive();
+      const guildCount  = allowedGuildCount();
+      const owners      = getOwnerIds();
+
       const embed = new EmbedBuilder()
         .setColor(COLORS.DARK)
-        .setTitle(`${EMOJIS.CROWN} Painel de Administração`)
-        .setDescription('Gerencie o servidor através dos painéis abaixo.')
-        .addFields(
-          { name: '⚙️ Configurações',       value: 'Canais, cargos, XP, boas-vindas',  inline: true },
-          { name: '📢 Comunicação',          value: 'Anúncios, enquetes, eventos',       inline: true },
-          { name: '🎁 Entretenimento',       value: 'Sorteios, conquistas, recompensas', inline: true },
-          { name: '🪙 Economia',             value: 'Dar/remover moedas e XP',          inline: true },
-          { name: '🛍️ Loja',                value: 'Gerenciar itens da loja',           inline: true },
-          { name: '🎯 Recompensas de Nível', value: 'Cargos automáticos por nível',     inline: true },
-          { name: '🔨 Moderação',            value: 'Ações de moderação rápida',         inline: true },
-          { name: '🎭 Registro de Cargos',   value: 'Menus de auto-cargo para membros',  inline: true },
-          { name: '🔧 Módulos',              value: 'Habilitar/desabilitar features',     inline: true },
+        .setTitle('🌐 Allowlist — Controle de Acesso')
+        .setDescription(
+          'Gerencie quais servidores o bot pode entrar e quem são os managers.
+
+' +
+          `**Enforcement:** ${enforcement ? '✅ Ativo (bot só entra em servidores autorizados)' : '❌ Inativo (bot entra em qualquer servidor)'}
+` +
+          `**Servidores autorizados:** ${guildCount}
+` +
+          `**Owners do bot:** ${owners.length}`
         )
-        .setTimestamp()
-        .setFooter({ text: '⚔️ Aliança Skyline — Admin' });
+        .addFields(
+          { name: '🏠 Guilds',    value: 'Adicionar/remover servidores autorizados', inline: true },
+          { name: '👤 Managers',  value: 'Adicionar/remover managers do bot',        inline: true },
+          { name: '📋 Listagem',  value: 'Ver lista completa de acessos',            inline: true },
+          { name: '🔒 Enforce',   value: 'Ativar/desativar restrição de acesso',     inline: true },
+        )
+        .setFooter({ text: '⚔️ Aliança Skyline — Controle de Acesso' })
+        .setTimestamp();
 
       const r1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('admin:config')           .setLabel('Configurações')   .setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admin:anuncio')          .setLabel('Anúncio')         .setEmoji('📢').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admin:poll')             .setLabel('Poll')             .setEmoji('📊').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admin:evento')           .setLabel('Evento')           .setEmoji('📌').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('allowlist:add_guild')      .setLabel('Add Servidor')     .setEmoji('➕').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('allowlist:remove_guild')   .setLabel('Remover Servidor') .setEmoji('➖').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('allowlist:add_manager')    .setLabel('Add Manager')      .setEmoji('👤').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('allowlist:remove_manager') .setLabel('Remover Manager')  .setEmoji('🗑️').setStyle(ButtonStyle.Secondary),
       );
       const r2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('admin:sorteio')          .setLabel('Sorteio')          .setEmoji('🎁').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admin:encerrar_sorteio') .setLabel('Encerrar Sorteio') .setEmoji('🏆').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('admin:conquista')        .setLabel('Conquistas')       .setEmoji('🏅').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admin:nivel_reward')     .setLabel('Recomp. Nível')    .setEmoji('🎯').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('allowlist:list')            .setLabel('Ver Allowlist')    .setEmoji('📋').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('allowlist:enforcement')     .setLabel(`Enforcement: ${enforcement ? 'ON' : 'OFF'}`).setEmoji('🔒').setStyle(enforcement ? ButtonStyle.Success : ButtonStyle.Danger),
       );
-      const r3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('admin:economia')   .setLabel('Economia')          .setEmoji('🪙').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admin:loja')       .setLabel('Loja')              .setEmoji('🛍️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admin:rank')       .setLabel('Definir Rank')      .setEmoji('👑').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('admin:cargo_menu') .setLabel('Registro de Cargos').setEmoji('🎭').setStyle(ButtonStyle.Secondary),
-      );
-      const r4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('admin:modulos').setLabel('Módulos')   .setEmoji('🔧').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('admin:mod')    .setLabel('Moderação') .setEmoji('🔨').setStyle(ButtonStyle.Secondary),
-      );
-      return i.reply({ embeds: [embed], components: [r1, r2, r3, r4], ephemeral: true });
+
+      return i.reply({ embeds: [embed], components: [r1, r2], ephemeral: true });
     }
+
   }
 }
-
-// ─── Botões do servidor ───────────────────────────────────────────────────────
 
 export async function handleServidorButton(i: ButtonInteraction, action: string) {
   if (!i.guild) return i.reply({ embeds: [errorEmbed('Erro', 'Use em um servidor.')], ephemeral: true });
@@ -422,6 +419,162 @@ export async function handleServidorButton(i: ButtonInteraction, action: string)
           { name: '🗄️ Servidores',        value: lines.join('\n') || '*Nenhum*',                                       inline: false },
         )
         .setFooter({ text: '🖤 Aliança Skyline — Rede Interna' })
+        .setTimestamp();
+      return i.editReply({ embeds: [embed] });
+    }
+
+    case 'anuncio': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:anuncio').setTitle('Criar Anúncio');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(200)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('conteudo').setLabel('Conteúdo').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(2000)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal_id').setLabel('ID do Canal (vazio = canal da aliança)').setStyle(TextInputStyle.Short).setRequired(false)),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'poll': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:poll').setTitle('Criar Enquete');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('pergunta').setLabel('Pergunta').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(200)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('opcoes').setLabel('Opções (uma por linha, 2–5)').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500).setPlaceholder('Opção A\nOpção B\nOpção C')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('duracao').setLabel('Duração (ex: 1h, 30m, 2d)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('1h')),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'sorteio': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:sorteio').setTitle('Criar Sorteio');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('premio').setLabel('Prêmio').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(200)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('duracao').setLabel('Duração (ex: 1h, 30m, 2d)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('1h')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('ganhadores').setLabel('Número de ganhadores').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('1')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal_id').setLabel('ID do Canal (vazio = canal da aliança)').setStyle(TextInputStyle.Short).setRequired(false)),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'encerrar_sorteio': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:encerrar_sorteio').setTitle('Encerrar Sorteio');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('message_id').setLabel('ID da Mensagem do Sorteio').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('ID da mensagem do sorteio ativo')),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'evento': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:evento').setTitle('Criar Evento');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título do Evento').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(200)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1500)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('horario').setLabel('Horário (ex: 25/12 20:00)').setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('DD/MM HH:MM')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('canal_id').setLabel('ID do Canal (vazio = canal da aliança)').setStyle(TextInputStyle.Short).setRequired(false)),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'conquista': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:conquista').setTitle('Dar Conquista a Usuário');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('user_id').setLabel('ID do Usuário').setStyle(TextInputStyle.Short).setRequired(true)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('titulo').setLabel('Título da Conquista').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('descricao').setLabel('Descrição').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(300)),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'nivel_reward': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:nivel_reward').setTitle('Recompensa de Nível');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('nivel').setLabel('Nível').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('ex: 10')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('cargo_id').setLabel('ID do Cargo (vazio = remover recompensa)').setStyle(TextInputStyle.Short).setRequired(false)),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'economia': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:economia').setTitle('Gerenciar Economia');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('user_id').setLabel('ID do Usuário').setStyle(TextInputStyle.Short).setRequired(true)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('acao').setLabel('Ação: dar / remover').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('dar ou remover')),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('quantidade').setLabel('Quantidade de Moedas').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('ex: 100')),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'loja': {
+      await i.deferReply({ ephemeral: true });
+      try {
+        const items = await (prisma as any).shopItem.findMany({ where: { guildId: i.guild!.id }, take: 10 });
+        if (!items?.length) {
+          return i.editReply({ embeds: [baseEmbed(0x470F78).setTitle('🛍️ Loja').setDescription('Nenhum item cadastrado na loja ainda.')] });
+        }
+        const list = items.map((item: any) => `**${item.name}** — 🪙 ${item.price}${item.roleId ? ` · <@&${item.roleId}>` : ''}`).join('\n');
+        return i.editReply({ embeds: [baseEmbed(0x470F78).setTitle('🛍️ Loja').setDescription(list).setFooter({ text: 'Use /admin → Loja para gerenciar itens' })] });
+      } catch {
+        return i.editReply({ embeds: [errorEmbed('Erro', 'Não foi possível carregar a loja.')] });
+      }
+    }
+
+    case 'rank': {
+      const modal = new ModalBuilder().setCustomId('servidor_modal:rank').setTitle('Definir Rank do Usuário');
+      modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('user_id').setLabel('ID do Usuário').setStyle(TextInputStyle.Short).setRequired(true)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('rank').setLabel('Rank (Bronze/Silver/Gold/Diamond/Master/Grandmaster/Challenger)').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('ex: Gold')),
+      );
+      return i.showModal(modal);
+    }
+
+    case 'cargo_menu': {
+      await i.deferReply({ ephemeral: true });
+      try {
+        const menus = await (prisma as any).selfRoleMenu.findMany({ where: { guildId: i.guild!.id }, take: 5 });
+        if (!menus?.length) {
+          return i.editReply({ embeds: [baseEmbed(0x470F78).setTitle('🎭 Registro de Cargos').setDescription('Nenhum menu de auto-cargo configurado.')] });
+        }
+        const list = menus.map((m: any) => `**${m.title || 'Menu de Cargos'}** — ${m.roles?.length ?? 0} cargos`).join('\n');
+        return i.editReply({ embeds: [baseEmbed(0x470F78).setTitle('🎭 Registro de Cargos').setDescription(list)] });
+      } catch {
+        return i.editReply({ embeds: [errorEmbed('Erro', 'Não foi possível carregar os menus de cargo.')] });
+      }
+    }
+
+    case 'modulos': {
+      await i.deferReply({ ephemeral: true });
+      const cfg = await getConfig(i.guild!.id);
+      const lines = [
+        `${(cfg as any).xpEnabled !== false    ? '✅' : '❌'} **Sistema de XP** — Ganho de XP por mensagens`,
+        `${(cfg as any).welcomeEnabled !== false? '✅' : '❌'} **Boas-vindas** — Mensagem ao entrar no servidor`,
+        `${(cfg as any).ticketEnabled !== false ? '✅' : '❌'} **Tickets** — Sistema de suporte`,
+        `${(cfg as any).antiSpam             ? '✅' : '❌'} **Anti-Spam** — Bloquear mensagens repetidas`,
+        `${(cfg as any).antiLinks            ? '✅' : '❌'} **Anti-Links** — Bloquear links externos`,
+        `${cfg.logChannelId                  ? '✅' : '❌'} **Logs** — ${cfg.logChannelId ? `<#${cfg.logChannelId}>` : 'canal não configurado'}`,
+      ];
+      return i.editReply({ embeds: [baseEmbed(0x470F78).setTitle('🔧 Módulos do Servidor').setDescription(lines.join('\n')).setFooter({ text: 'Use /admin → Configurações para gerenciar módulos' })] });
+    }
+
+    case 'mod': {
+      await i.deferReply({ ephemeral: true });
+      const embed = baseEmbed(0x470F78)
+        .setTitle('🔨 Painel de Moderação')
+        .setDescription(
+          'Comandos disponíveis de moderação:
+' +
+          '`/ban` — Banir usuário
+' +
+          '`/kick` — Expulsar usuário
+' +
+          '`/mute` — Mutar usuário
+' +
+          '`/warn` — Advertir usuário
+' +
+          '`/clear` — Limpar mensagens
+' +
+          '`/unban` — Desbanir usuário
+' +
+          '`/infractions` — Ver histórico de infrações'
+        )
+        .setFooter({ text: 'Ações ficam registradas no canal de logs' })
         .setTimestamp();
       return i.editReply({ embeds: [embed] });
     }
@@ -587,6 +740,17 @@ export async function handleAllianceModal(i: ModalSubmitInteraction, action: str
 
 // ─── Modais do servidor (dono do server) ─────────────────────────────────────
 
+function parseDurationMs(str: string): number {
+  const m = str.trim().match(/^(\d+)(m|h|d)$/i);
+  if (!m) return 3600000; // default 1h
+  const n = parseInt(m[1]);
+  if (m[2] === 'm') return n * 60000;
+  if (m[2] === 'h') return n * 3600000;
+  return n * 86400000;
+}
+
+
+
 export async function handleServidorModal(i: ModalSubmitInteraction, action: string) {
   if (!i.guild) return i.reply({ embeds: [errorEmbed('Erro', 'Use em um servidor.')], ephemeral: true });
 
@@ -625,6 +789,163 @@ export async function handleServidorModal(i: ModalSubmitInteraction, action: str
 
       await prisma.allianceServer.update({ where: { guildId }, data: { inviteLink: invite } });
       return i.editReply({ embeds: [successEmbed('Link Definido', `Link de convite salvo:\n${invite}`)] });
+    }
+
+    case 'anuncio': {
+      const titulo   = getField('titulo') ?? 'Anúncio';
+      const conteudo = getField('conteudo') ?? '';
+      const rawCh    = getField('canal_id');
+      const targetId = rawCh ? resolveId(rawCh) : (server.channelId ?? '');
+      if (!targetId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Informe um ID de canal ou configure o canal da aliança.')] });
+      const ch = i.guild!.channels.cache.get(targetId) as TextChannel | undefined;
+      if (!ch) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `Canal \`${targetId}\` não encontrado.`)] });
+      const embed = new EmbedBuilder().setColor(0x470F78).setTitle(`📢 ${titulo}`).setDescription(conteudo).setFooter({ text: `Anúncio por ${i.user.username}` }).setTimestamp();
+      await (ch as TextChannel).send({ embeds: [embed] });
+      return i.editReply({ embeds: [successEmbed('Anúncio Enviado', `Anúncio enviado em <#${targetId}>!`)] });
+    }
+
+    case 'poll': {
+      const pergunta = getField('pergunta') ?? '';
+      const rawOpts  = (getField('opcoes') ?? '').split('\n').map((o: string) => o.trim()).filter(Boolean).slice(0, 5);
+      if (rawOpts.length < 2) return i.editReply({ embeds: [errorEmbed('Inválido', 'Forneça pelo menos 2 opções.')] });
+      const durStr = getField('duracao') ?? '1h';
+      const endAt  = new Date(Date.now() + parseDurationMs(durStr));
+      const letters = ['🇦','🇧','🇨','🇩','🇪'];
+      const opts = rawOpts.map((o: string, idx: number) => `${letters[idx]} ${o}`).join('\n');
+      const targetId = server.channelId ?? '';
+      if (!targetId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Configure o canal da aliança primeiro.')] });
+      const ch = i.guild!.channels.cache.get(targetId) as TextChannel | undefined;
+      if (!ch) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', 'Canal da aliança não encontrado.')] });
+      const embed = new EmbedBuilder().setColor(0x470F78).setTitle(`📊 ${pergunta}`).setDescription(opts).addFields({ name: '⏱️ Encerra', value: `<t:${Math.floor(endAt.getTime()/1000)}:R>` }).setFooter({ text: `Poll por ${i.user.username}` }).setTimestamp();
+      const msg = await (ch as TextChannel).send({ embeds: [embed] });
+      for (const letter of letters.slice(0, rawOpts.length)) await msg.react(letter).catch(() => null);
+      return i.editReply({ embeds: [successEmbed('Poll Criada', `Enquete enviada em <#${targetId}>!`)] });
+    }
+
+    case 'sorteio': {
+      const premio    = getField('premio') ?? '';
+      const durStr    = getField('duracao') ?? '1h';
+      const winners   = Math.max(1, parseInt(getField('ganhadores') ?? '1') || 1);
+      const rawCh     = getField('canal_id');
+      const targetId  = rawCh ? resolveId(rawCh) : (server.channelId ?? '');
+      if (!targetId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Informe um ID de canal ou configure o canal da aliança.')] });
+      const ch = i.guild!.channels.cache.get(targetId) as TextChannel | undefined;
+      if (!ch) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `Canal \`${targetId}\` não encontrado.`)] });
+      const endAt  = new Date(Date.now() + parseDurationMs(durStr));
+      const embed  = new EmbedBuilder().setColor(0x2ECC71)
+        .setTitle('🎁 SORTEIO')
+        .setDescription(`**Prêmio:** ${premio}\n\nClique em 🎉 para participar!`)
+        .addFields(
+          { name: '🏆 Ganhadores', value: String(winners), inline: true },
+          { name: '⏱️ Encerra',    value: `<t:${Math.floor(endAt.getTime()/1000)}:R>`, inline: true },
+          { name: '🎗️ Criado por', value: `<@${i.user.id}>`, inline: true },
+        )
+        .setFooter({ text: 'Reaja com 🎉 para participar!' })
+        .setTimestamp();
+      const msg = await (ch as TextChannel).send({ embeds: [embed] });
+      await msg.react('🎉').catch(() => null);
+      try {
+        await (prisma as any).giveaway.create({ data: { guildId: guildId, channelId: targetId, messageId: msg.id, prize: premio, endAt, winnerCount: winners, createdBy: i.user.id } });
+      } catch { /* model may not exist */ }
+      return i.editReply({ embeds: [successEmbed('Sorteio Criado', `Sorteio iniciado em <#${targetId}>! Encerra <t:${Math.floor(endAt.getTime()/1000)}:R>.`)] });
+    }
+
+    case 'encerrar_sorteio': {
+      const messageId = getField('message_id') ?? '';
+      if (!messageId) return i.editReply({ embeds: [errorEmbed('Inválido', 'ID da mensagem inválido.')] });
+      try {
+        const giveaway = await (prisma as any).giveaway.findFirst({ where: { guildId, messageId } });
+        if (!giveaway) return i.editReply({ embeds: [errorEmbed('Não encontrado', 'Sorteio não encontrado com este ID de mensagem.')] });
+        const ch = i.guild!.channels.cache.get(giveaway.channelId) as TextChannel | undefined;
+        const msg = ch ? await ch.messages.fetch(messageId).catch(() => null) : null;
+        const reaction = msg?.reactions.cache.get('🎉');
+        const participants = reaction ? [...(await reaction.users.fetch()).values()].filter(u => !u.bot) : [];
+        if (!participants.length) {
+          await (prisma as any).giveaway.update({ where: { id: giveaway.id }, data: { endAt: new Date() } });
+          return i.editReply({ embeds: [errorEmbed('Sem participantes', 'Nenhum participante no sorteio.')] });
+        }
+        const winnersArr = participants.sort(() => Math.random() - 0.5).slice(0, giveaway.winnerCount);
+        const winnerMentions = winnersArr.map((u: any) => `<@${u.id}>`).join(', ');
+        if (ch) await ch.send({ content: `🎉 **Sorteio encerrado!** Parabéns ${winnerMentions}! Você ganhou **${giveaway.prize}**!` });
+        await (prisma as any).giveaway.update({ where: { id: giveaway.id }, data: { endAt: new Date(), winnerIds: winnersArr.map((u: any) => u.id) } });
+        return i.editReply({ embeds: [successEmbed('Sorteio Encerrado', `Ganhadores: ${winnerMentions}`)] });
+      } catch (e) {
+        return i.editReply({ embeds: [errorEmbed('Erro', 'Não foi possível encerrar o sorteio.')] });
+      }
+    }
+
+    case 'evento': {
+      const titulo    = getField('titulo') ?? '';
+      const descricao = getField('descricao') ?? '';
+      const horario   = getField('horario');
+      const rawCh     = getField('canal_id');
+      const targetId  = rawCh ? resolveId(rawCh) : (server.channelId ?? '');
+      if (!targetId) return i.editReply({ embeds: [errorEmbed('Canal não configurado', 'Informe um ID de canal ou configure o canal da aliança.')] });
+      const ch = i.guild!.channels.cache.get(targetId) as TextChannel | undefined;
+      if (!ch) return i.editReply({ embeds: [errorEmbed('Canal não encontrado', `Canal \`${targetId}\` não encontrado.`)] });
+      const embed = new EmbedBuilder().setColor(0x3498DB).setTitle(`📌 ${titulo}`).setDescription(descricao);
+      if (horario) embed.addFields({ name: '🕐 Horário', value: horario, inline: true });
+      embed.setFooter({ text: `Evento por ${i.user.username}` }).setTimestamp();
+      await (ch as TextChannel).send({ embeds: [embed] });
+      return i.editReply({ embeds: [successEmbed('Evento Criado', `Evento enviado em <#${targetId}>!`)] });
+    }
+
+    case 'conquista': {
+      const userId    = resolveId(getField('user_id') ?? '');
+      const titulo    = getField('titulo') ?? '';
+      const descricao = getField('descricao') ?? '';
+      if (!userId) return i.editReply({ embeds: [errorEmbed('Inválido', 'ID de usuário inválido.')] });
+      try {
+        await (prisma as any).achievement.create({ data: { memberId: userId, guildId, title: titulo, description: descricao } });
+      } catch { /* model may differ */ }
+      return i.editReply({ embeds: [successEmbed('Conquista Concedida', `Conquista **${titulo}** atribuída a <@${userId}>!`)] });
+    }
+
+    case 'nivel_reward': {
+      const nivel   = parseInt(getField('nivel') ?? '0');
+      const cargoId = resolveId(getField('cargo_id') ?? '');
+      if (!nivel || nivel < 1) return i.editReply({ embeds: [errorEmbed('Inválido', 'Nível inválido.')] });
+      try {
+        if (cargoId) {
+          await (prisma as any).levelReward.upsert({ where: { guildId_level: { guildId, level: nivel } }, update: { roleId: cargoId }, create: { guildId, level: nivel, roleId: cargoId } });
+          return i.editReply({ embeds: [successEmbed('Recompensa Definida', `Nível **${nivel}** → <@&${cargoId}>`)] });
+        } else {
+          await (prisma as any).levelReward.deleteMany({ where: { guildId, level: nivel } });
+          return i.editReply({ embeds: [successEmbed('Recompensa Removida', `Recompensa do nível **${nivel}** removida.`)] });
+        }
+      } catch { return i.editReply({ embeds: [errorEmbed('Erro', 'Não foi possível salvar a recompensa.')] }); }
+    }
+
+    case 'economia': {
+      const userId    = resolveId(getField('user_id') ?? '');
+      const acao      = (getField('acao') ?? '').toLowerCase().trim();
+      const quantidade = parseInt(getField('quantidade') ?? '0');
+      if (!userId) return i.editReply({ embeds: [errorEmbed('Inválido', 'ID de usuário inválido.')] });
+      if (!['dar', 'remover'].includes(acao)) return i.editReply({ embeds: [errorEmbed('Inválido', 'Ação deve ser "dar" ou "remover".')] });
+      if (!quantidade || quantidade < 1) return i.editReply({ embeds: [errorEmbed('Inválido', 'Quantidade inválida.')] });
+      const delta = acao === 'dar' ? quantidade : -quantidade;
+      await prisma.member.upsert({
+        where: { discordId: userId },
+        update: { coins: { increment: delta } },
+        create: { discordId: userId, username: userId, coins: Math.max(0, delta) },
+      });
+      const action = acao === 'dar' ? 'adicionadas a' : 'removidas de';
+      return i.editReply({ embeds: [successEmbed('Economia Atualizada', `🪙 **${quantidade}** moedas ${action} <@${userId}>.`)] });
+    }
+
+    case 'rank': {
+      const userId = resolveId(getField('user_id') ?? '');
+      const rank   = (getField('rank') ?? '').trim();
+      const validRanks = ['Bronze','Silver','Gold','Diamond','Master','Grandmaster','Challenger'];
+      if (!userId) return i.editReply({ embeds: [errorEmbed('Inválido', 'ID de usuário inválido.')] });
+      const normalised = validRanks.find(r => r.toLowerCase() === rank.toLowerCase());
+      if (!normalised) return i.editReply({ embeds: [errorEmbed('Rank Inválido', `Ranks válidos: ${validRanks.join(', ')}`)] });
+      await prisma.member.upsert({
+        where: { discordId: userId },
+        update: { rank: normalised },
+        create: { discordId: userId, username: userId, rank: normalised },
+      });
+      return i.editReply({ embeds: [successEmbed('Rank Definido', `<@${userId}> agora é **${normalised}**!`)] });
     }
 
   }

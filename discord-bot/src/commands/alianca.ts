@@ -28,7 +28,8 @@ export default {
         '**Servidores:** Adicionar, remover e atualizar classes\n' +
         '**Pessoas:** Definir representantes e donos por servidor\n' +
         '**Embed Oficial:** Enviar ou atualizar o embed público da aliança\n' +
-        '**Blacklist:** Banir usuário de todos os servidores da aliança'
+        '**Blacklist:** Banir usuário de todos os servidores da aliança\n' +
+        '**Allowlist:** Gerenciar servidores e managers autorizados'
       )
       .addFields(
         { name: '🏛️ Servidores',      value: 'Gerenciar servidores membros',           inline: true },
@@ -37,7 +38,7 @@ export default {
         { name: '📢 Embed Oficial',    value: 'Enviar/atualizar embed da aliança',      inline: true },
         { name: '🚫 Blacklist',        value: 'Banir usuário de todos os servidores',   inline: true },
         { name: '👁️ Ver Membros',      value: 'Listar donos e representantes',          inline: true },
-        { name: '🔧 Painel Admin',     value: 'Gerenciar servidor via painel de admin', inline: true },
+        { name: '🌐 Acesso (Allowlist)', value: 'Servidores e managers autorizados',   inline: true },
       )
       .setFooter({ text: '⚔️ Aliança Skyline — Admin' })
       .setTimestamp();
@@ -63,7 +64,7 @@ export default {
     );
     // Linha 5 — Painel Admin mesclado (apenas allowlist)
     const row5 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('alianca:admin_panel').setLabel('Painel Admin').setEmoji('🔧').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('alianca:allowlist').setLabel('Acesso (Allowlist)').setEmoji('🌐').setStyle(ButtonStyle.Danger),
     );
 
     await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4, row5], ephemeral: true });
