@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, ActionRo
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { parseDuration } from '../../utils/helpers';
 
 export default {
@@ -11,17 +11,17 @@ export default {
     .setName('evento')
     .setDescription('Gerencia eventos do servidor')
     .addSubcommand(sub =>
-      sub.setName('criar').setDescription('Cria um novo evento (admin)')
+      sub.setName('criar').setDescription('Cria um novo evento (dono/representante)')
         .addStringOption(opt => opt.setName('titulo').setDescription('Título do evento').setRequired(true).setMaxLength(100))
         .addStringOption(opt => opt.setName('descricao').setDescription('Descrição do evento').setRequired(true).setMaxLength(1000))
         .addStringOption(opt => opt.setName('quando').setDescription('Quando acontece: 1h, 2d, 30m').setRequired(true))
     )
     .addSubcommand(sub =>
-      sub.setName('encerrar').setDescription('Encerra um evento (admin)')
+      sub.setName('encerrar').setDescription('Encerra um evento (dono/representante)')
         .addStringOption(opt => opt.setName('id').setDescription('ID do evento').setRequired(true))
     ),
   async execute(interaction: ChatInputCommandInteraction) {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkServerOwnerOrRepresentative(interaction))) return;
     const sub = interaction.options.getSubcommand();
     const guild = interaction.guild!;
 
@@ -63,14 +63,7 @@ export default {
       if (!event || event.guildId !== guild.id) return interaction.editReply({ embeds: [errorEmbed('Não encontrado', 'Evento não encontrado.')] });
       if (event.ended) return interaction.editReply({ embeds: [errorEmbed('Já encerrado', 'Este evento já foi encerrado.')] });
       await prisma.event.update({ where: { id }, data: { ended: true } });
-      const channel = guild.channels.cache.get(event.channelId) as TextChannel | undefined;
-      if (channel && event.messageId) {
-        const msg = await channel.messages.fetch(event.messageId).catch(() => null);
-        if (msg) {
-          await msg.edit({ components: [], embeds: [baseEmbed(COLORS.ERROR).setTitle(`🎉 ${event.title} — Encerrado`).setDescription(event.description ?? '').addFields({ name: '👥 Total de inscritos', value: `${event._count.participants}` }).setFooter({ text: '⚔️ Aliança Skyline' })] }).catch(() => null);
-        }
-      }
-      await interaction.editReply({ embeds: [successEmbed('Evento Encerrado!', `Evento **${event.title}** encerrado. ${event._count.participants} participante(s).`)] });
+      await interaction.editReply({ embeds: [successEmbed('Evento Encerrado!', `Evento **${event.title}** encerrado com **${event._count.participants}** participante(s).`)] });
     }
   },
 } satisfies Command;

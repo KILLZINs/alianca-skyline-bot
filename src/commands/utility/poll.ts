@@ -2,13 +2,13 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, ActionRo
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 
 export default {
   category: 'utility',
   data: new SlashCommandBuilder()
     .setName('poll')
-    .setDescription('Cria uma enquete interativa (admin)')
+    .setDescription('Cria uma enquete interativa (dono/representante)')
     .addSubcommand(sub =>
       sub.setName('criar').setDescription('Cria uma nova poll')
         .addStringOption(opt => opt.setName('pergunta').setDescription('Pergunta da poll').setRequired(true).setMaxLength(200))
@@ -18,7 +18,7 @@ export default {
         .addStringOption(opt => opt.setName('opcao4').setDescription('Opção 4 (opcional)').setRequired(false).setMaxLength(80))
     ),
   async execute(interaction: ChatInputCommandInteraction) {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkServerOwnerOrRepresentative(interaction))) return;
     const { isFeatureEnabled, featureDisabledMsg } = await import('../../utils/features');
     if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featPolls'))) {
       return interaction.reply({ content: featureDisabledMsg('featPolls'), ephemeral: true });

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, ActionRo
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { parseDuration } from '../../utils/helpers';
 
 export default {
@@ -11,17 +11,17 @@ export default {
     .setName('giveaway')
     .setDescription('Gerencia sorteios do servidor')
     .addSubcommand(sub =>
-      sub.setName('criar').setDescription('Cria um novo sorteio (admin)')
+      sub.setName('criar').setDescription('Cria um novo sorteio (dono/representante)')
         .addStringOption(opt => opt.setName('premio').setDescription('Prêmio do sorteio').setRequired(true))
         .addIntegerOption(opt => opt.setName('vencedores').setDescription('Número de vencedores').setRequired(true).setMinValue(1).setMaxValue(20))
         .addStringOption(opt => opt.setName('duracao').setDescription('Duração: 1h, 2d, 30m').setRequired(true))
     )
     .addSubcommand(sub =>
-      sub.setName('encerrar').setDescription('Encerra um sorteio antecipadamente (admin)')
+      sub.setName('encerrar').setDescription('Encerra um sorteio antecipadamente (dono/representante)')
         .addStringOption(opt => opt.setName('id').setDescription('ID do sorteio').setRequired(true))
     ),
   async execute(interaction: ChatInputCommandInteraction) {
-    if (!(await checkAdmin(interaction))) return;
+    if (!(await checkServerOwnerOrRepresentative(interaction))) return;
     const { isFeatureEnabled, featureDisabledMsg } = await import('../../utils/features');
     if (interaction.guildId && !(await isFeatureEnabled(interaction.guildId, 'featGiveaways'))) {
       return interaction.reply({ content: featureDisabledMsg('featGiveaways'), ephemeral: true });
@@ -67,21 +67,18 @@ export default {
       if (giveaway.ended) return interaction.editReply({ embeds: [errorEmbed('Já encerrado', 'Este sorteio já foi encerrado.')] });
 
       const entries = giveaway.entries;
-      const shuffled = entries.sort(() => Math.random() - 0.5);
-      const chosen = shuffled.slice(0, giveaway.winners);
-      const winnerMentions = chosen.map(e => `<@${e.member.discordId}>`).join(', ') || 'Nenhum participante.';
+      const winnersCount = Math.min(giveaway.winners, entries.length);
+      const shuffled = [...entries].sort(() => Math.random() - 0.5);
+      const winners = shuffled.slice(0, winnersCount);
+      const winnerIds = winners.map(e => e.memberId);
 
-      await prisma.giveaway.update({ where: { id }, data: { ended: true } });
+      await prisma.giveaway.update({ where: { id }, data: { ended: true, winnerIds } });
 
-      const channel = guild.channels.cache.get(giveaway.channelId) as TextChannel | undefined;
-      if (channel) {
-        await channel.send({ embeds: [baseEmbed(COLORS.GOLD).setTitle('🎉 Sorteio Encerrado!').setDescription(`**Prêmio:** ${giveaway.prize}\n**Vencedor(es):** ${winnerMentions}`).setFooter({ text: '⚔️ Aliança Skyline' })] });
-        if (giveaway.messageId) {
-          const msg = await channel.messages.fetch(giveaway.messageId).catch(() => null);
-          if (msg) await msg.edit({ components: [] }).catch(() => null);
-        }
-      }
-      await interaction.editReply({ embeds: [successEmbed('Encerrado!', `Vencedor(es): ${winnerMentions}`)] });
+      const msg = winners.length > 0
+        ? `🏆 Vencedor(es): ${winnerIds.map(w => `<@${w}>`).join(', ')}`
+        : 'Nenhum participante para sortear.';
+
+      await interaction.editReply({ embeds: [successEmbed('Sorteio Encerrado!', `**${giveaway.prize}** — ${msg}`)] });
     }
   },
 } satisfies Command;

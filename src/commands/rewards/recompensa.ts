@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'd
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { getOrCreateMember } from '../../utils/helpers';
 
 export default {
@@ -11,12 +11,12 @@ export default {
     .setName('recompensa')
     .setDescription('Sistema de moedas e recompensas')
     .addSubcommand(sub =>
-      sub.setName('dar').setDescription('Dá moedas para um membro (admin)')
+      sub.setName('dar').setDescription('Dá moedas para um membro (dono/representante)')
         .addUserOption(opt => opt.setName('usuario').setDescription('Membro').setRequired(true))
         .addIntegerOption(opt => opt.setName('quantidade').setDescription('Quantidade de moedas').setRequired(true).setMinValue(1))
     )
     .addSubcommand(sub =>
-      sub.setName('remover').setDescription('Remove moedas de um membro (admin)')
+      sub.setName('remover').setDescription('Remove moedas de um membro (dono/representante)')
         .addUserOption(opt => opt.setName('usuario').setDescription('Membro').setRequired(true))
         .addIntegerOption(opt => opt.setName('quantidade').setDescription('Quantidade de moedas').setRequired(true).setMinValue(1))
     )
@@ -28,7 +28,7 @@ export default {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'dar') {
-      if (!(await checkAdmin(interaction))) return;
+      if (!(await checkServerOwnerOrRepresentative(interaction))) return;
       const target = interaction.options.getMember('usuario') as GuildMember | null;
       const qtd = interaction.options.getInteger('quantidade', true);
       if (!target) return interaction.reply({ embeds: [errorEmbed('Não encontrado', 'Membro não encontrado.')], ephemeral: true });
@@ -39,7 +39,7 @@ export default {
     }
 
     else if (sub === 'remover') {
-      if (!(await checkAdmin(interaction))) return;
+      if (!(await checkServerOwnerOrRepresentative(interaction))) return;
       const target = interaction.options.getMember('usuario') as GuildMember | null;
       const qtd = interaction.options.getInteger('quantidade', true);
       if (!target) return interaction.reply({ embeds: [errorEmbed('Não encontrado', 'Membro não encontrado.')], ephemeral: true });

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'd
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { getOrCreateMember } from '../../utils/helpers';
 
 export default {
@@ -11,14 +11,14 @@ export default {
     .setName('conquista')
     .setDescription('Sistema de conquistas')
     .addSubcommand(sub =>
-      sub.setName('criar').setDescription('Cria uma nova conquista (admin)')
+      sub.setName('criar').setDescription('Cria uma nova conquista (dono/representante)')
         .addStringOption(opt => opt.setName('nome').setDescription('Nome da conquista').setRequired(true).setMaxLength(60))
         .addStringOption(opt => opt.setName('descricao').setDescription('Descrição').setRequired(true).setMaxLength(200))
         .addIntegerOption(opt => opt.setName('xp').setDescription('XP de recompensa').setRequired(true).setMinValue(0))
         .addIntegerOption(opt => opt.setName('moedas').setDescription('Moedas de recompensa').setRequired(false).setMinValue(0))
     )
     .addSubcommand(sub =>
-      sub.setName('dar').setDescription('Concede uma conquista a um membro (admin)')
+      sub.setName('dar').setDescription('Concede uma conquista a um membro (dono/representante)')
         .addUserOption(opt => opt.setName('usuario').setDescription('Membro').setRequired(true))
         .addStringOption(opt => opt.setName('nome').setDescription('Nome da conquista').setRequired(true))
     )
@@ -30,7 +30,7 @@ export default {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'criar') {
-      if (!(await checkAdmin(interaction))) return;
+      if (!(await checkServerOwnerOrRepresentative(interaction))) return;
       const nome = interaction.options.getString('nome', true);
       const descricao = interaction.options.getString('descricao', true);
       const xp = interaction.options.getInteger('xp', true);
@@ -43,7 +43,7 @@ export default {
     }
 
     else if (sub === 'dar') {
-      if (!(await checkAdmin(interaction))) return;
+      if (!(await checkServerOwnerOrRepresentative(interaction))) return;
       const target = interaction.options.getMember('usuario') as GuildMember | null;
       const nome = interaction.options.getString('nome', true);
       if (!target) return interaction.reply({ embeds: [errorEmbed('Não encontrado', 'Membro não encontrado.')], ephemeral: true });

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'd
 import { Command } from '../../types';
 import { prisma } from '../../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed, rankEmoji } from '../../utils/embeds';
-import { checkAdmin } from '../../utils/permissions';
+import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { RANKS } from '../../types';
 
 export default {
@@ -11,7 +11,7 @@ export default {
     .setName('rank')
     .setDescription('Gerencia os ranks dos membros')
     .addSubcommand(sub =>
-      sub.setName('definir').setDescription('Define o rank de um membro (admin)')
+      sub.setName('definir').setDescription('Define o rank de um membro (dono/representante)')
         .addUserOption(opt => opt.setName('usuario').setDescription('Membro').setRequired(true))
         .addStringOption(opt => opt.setName('rank').setDescription('Rank').setRequired(true)
           .addChoices(...RANKS.map(r => ({ name: r, value: r }))))
@@ -23,7 +23,7 @@ export default {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'definir') {
-      if (!(await checkAdmin(interaction))) return;
+      if (!(await checkServerOwnerOrRepresentative(interaction))) return;
       const target = interaction.options.getMember('usuario') as GuildMember | null;
       const newRank = interaction.options.getString('rank', true);
       if (!target) return interaction.reply({ embeds: [errorEmbed('Não encontrado', 'Membro não encontrado.')], ephemeral: true });
