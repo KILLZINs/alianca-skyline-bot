@@ -114,24 +114,32 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
   const info = EMBED_CATALOG[key];
   const tpl  = getTemplate(key);
 
-  const embed = baseEmbed(COLORS.WARNING)
-    .setTitle('✏️ Editar: ' + (info?.label ?? key))
-    .setDescription('Personalize os campos do embed **' + (info?.label ?? key) + '**.\n\n🖼️ **Thumbnail e Imagem:** cole o URL direto no campo.')
-    .addFields(
-      ALL_FIELDS.map(field => {
-        const meta  = FIELD_META[field];
-        const value = tpl?.[field as keyof typeof tpl];
-        let display: string;
-        if (field === 'color' && value) {
-          display = intToHex(value as number);
-        } else if ((field === 'imageUrl' || field === 'thumbnailUrl') && value) {
-          display = '✅ ' + (value as string).slice(0, 60) + ((value as string).length > 60 ? '…' : '');
-        } else {
-          display = (value as string | null | undefined) ?? '*(padrão)*';
-        }
-        return { name: meta.emoji + ' ' + meta.label, value: display, inline: true };
-      })
-    );
+  // ── Pré-visualização ao vivo do embed como será exibido ─────────────
+  const hasAnyConfig = !!(tpl && (tpl.title || tpl.description || tpl.color != null || tpl.thumbnailUrl || tpl.imageUrl || tpl.footerText));
+
+  const embed = new EmbedBuilder();
+
+  // Cor: usa a salva no DB (inteiro) ou o primário do bot
+  embed.setColor((tpl?.color ?? COLORS.PRIMARY) as number);
+
+  // Título: usa o configurado ou indica que ainda não foi definido
+  embed.setTitle(tpl?.title ?? `✏️ ${info?.label ?? key} — sem título definido`);
+
+  // Descrição
+  if (tpl?.description) {
+    embed.setDescription(tpl.description);
+  } else if (!hasAnyConfig) {
+    embed.setDescription('*Nenhum campo configurado ainda. Use os botões abaixo para personalizar este embed.*');
+  }
+
+  // Thumbnail e imagem
+  if (tpl?.thumbnailUrl) embed.setThumbnail(tpl.thumbnailUrl);
+  if (tpl?.imageUrl)     embed.setImage(tpl.imageUrl);
+
+  // Rodapé: usa o configurado ou o padrão da aliança
+  const footerText = tpl?.footerText ?? '⚔️ Aliança Skyline';
+  const footerIcon = tpl?.footerIcon ?? undefined;
+  embed.setFooter(footerIcon ? { text: footerText, iconURL: footerIcon } : { text: footerText });
 
   const rows: ActionRowBuilder<ButtonBuilder>[] = [
     // Linha 1: title, description, color
