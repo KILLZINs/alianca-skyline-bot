@@ -114,29 +114,26 @@ function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuil
   const info = EMBED_CATALOG[key];
   const tpl  = getTemplate(key);
 
-  // ── Pré-visualização ao vivo do embed como será exibido ─────────────
-  const hasAnyConfig = !!(tpl && (tpl.title || tpl.description || tpl.color != null || tpl.thumbnailUrl || tpl.imageUrl || tpl.footerText));
-
+  // ── Pré-visualização ao vivo: mostra o embed como está agora ─────────
+  // Se nenhum campo foi configurado ainda, exibe o embed com os padrões
+  // reais do bot (o que o usuário veria antes de fazer qualquer alteração).
   const embed = new EmbedBuilder();
 
-  // Cor: usa a salva no DB (inteiro) ou o primário do bot
+  // Cor: salva como inteiro no DB; sem config → cor padrão PRIMARY
   embed.setColor((tpl?.color ?? COLORS.PRIMARY) as number);
 
-  // Título: usa o configurado ou indica que ainda não foi definido
-  embed.setTitle(tpl?.title ?? `✏️ ${info?.label ?? key} — sem título definido`);
+  // Título: configurado → usa; sem config → label do catálogo (estado real padrão)
+  embed.setTitle(tpl?.title ?? (info?.label ?? key));
 
-  // Descrição
-  if (tpl?.description) {
-    embed.setDescription(tpl.description);
-  } else if (!hasAnyConfig) {
-    embed.setDescription('*Nenhum campo configurado ainda. Use os botões abaixo para personalizar este embed.*');
-  }
+  // Descrição: configurada → usa; sem config → descrição do catálogo (o que é esse embed)
+  const defaultDesc = info?.desc ?? null;
+  embed.setDescription(tpl?.description ?? defaultDesc);
 
   // Thumbnail e imagem
   if (tpl?.thumbnailUrl) embed.setThumbnail(tpl.thumbnailUrl);
   if (tpl?.imageUrl)     embed.setImage(tpl.imageUrl);
 
-  // Rodapé: usa o configurado ou o padrão da aliança
+  // Rodapé: configurado → usa; sem config → padrão do bot
   const footerText = tpl?.footerText ?? '⚔️ Aliança Skyline';
   const footerIcon = tpl?.footerIcon ?? undefined;
   embed.setFooter(footerIcon ? { text: footerText, iconURL: footerIcon } : { text: footerText });
