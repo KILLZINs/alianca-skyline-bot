@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { prisma } from '../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed, warningEmbed, rankEmoji, levelBar, colorFromLevel } from '../utils/embeds';
+import { applyTemplate } from '../utils/embedTemplates';
 import { getOrCreateMember, getConfig, formatDuration } from '../utils/helpers';
 import { FEATURE_META, FEATURE_KEYS, type FeatureKey } from '../utils/features';
 import { xpForNextLevel, RANKS } from '../types';
@@ -920,7 +921,7 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
     const config = await getConfig(i.guild!.id);
     if (config.ticketLogChannelId) {
       const ch = i.guild?.channels.cache.get(config.ticketLogChannelId) as TextChannel | undefined;
-      if (ch) await ch.send({ embeds: [baseEmbed(COLORS.ERROR).setTitle('🎫 Ticket Fechado').addFields({ name: 'Fechado por', value: `${i.user.tag}`, inline: true }, { name: 'Canal', value: `${ticket.channelId}`, inline: true })] });
+      if (ch) { const closeEmbed = baseEmbed(COLORS.ERROR).setTitle('🎫 Ticket Fechado').addFields({ name: 'Fechado por', value: `${i.user.tag}`, inline: true }, { name: 'Canal', value: `${ticket.channelId}`, inline: true }); applyTemplate(closeEmbed, 'ticket.close'); await ch.send({ embeds: [closeEmbed] }); }
     }
     await i.editReply({ embeds: [successEmbed('Ticket Fechado', 'Este canal será deletado em 5 segundos.')] });
 
@@ -999,7 +1000,7 @@ async function ticketButtons(i: ButtonInteraction, action: string, extra: string
 
     await i.editReply({ embeds: [successEmbed('Ticket Assumido', 'Você assumiu este ticket.')] });
     const ch = i.channel as TextChannel | null;
-    if (ch) await ch.send({ embeds: [baseEmbed(COLORS.INFO).setDescription(`${EMOJIS.SHIELD} Ticket assumido por ${i.user}.`)] });
+    if (ch) { const claimEmbed = baseEmbed(COLORS.INFO).setDescription(`${EMOJIS.SHIELD} Ticket assumido por ${i.user}.`); applyTemplate(claimEmbed, 'ticket.claim'); await ch.send({ embeds: [claimEmbed] }); }
   }
 
   if (action === 'info') {

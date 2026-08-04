@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel, ActionRo
 import { Command } from '../../types';
 import { COLORS, EMOJIS, baseEmbed } from '../../utils/embeds';
 import { checkAdmin } from '../../utils/permissions';
+import { applyTemplate } from '../../utils/embedTemplates';
 
 export default {
   category: 'tickets',
@@ -37,6 +38,7 @@ export default {
           { name: '❓ Outro', value: 'Outros assuntos', inline: true },
         )
         .setFooter({ text: '⚔️ Aliança Skyline • Abra apenas um ticket por vez' });
+      applyTemplate(embed, 'ticket.create');
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('painel:ticket').setLabel('Abrir Ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary),

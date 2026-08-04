@@ -6,6 +6,7 @@ import { prisma } from '../../database/client';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
 import { getConfig, parseDuration } from '../../utils/helpers';
 import { checkModerator } from '../../utils/permissions';
+import { applyTemplate } from '../../utils/embedTemplates';
 
 async function logAction(guild: any, channelId: string | null | undefined, embed: EmbedBuilder) {
   if (!channelId) return;
@@ -70,7 +71,7 @@ export default {
       if (!target.bannable) return interaction.editReply({ embeds: [errorEmbed('Sem permissão', 'Não consigo banir este membro.')] });
       try {
         await target.ban({ reason: `${interaction.user.tag}: ${motivo}`, deleteMessageSeconds: dias * 86400 });
-        await logAction(guild, config.logChannelId, baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${target.user.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+        { const banEmbed = baseEmbed(COLORS.ERROR).setTitle(`${EMOJIS.HAMMER} Membro Banido`).addFields({ name: 'Usuário', value: `${target.user.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Motivo', value: motivo }); applyTemplate(banEmbed, 'mod.ban'); await logAction(guild, config.logChannelId, banEmbed); }
         await interaction.editReply({ embeds: [successEmbed('Banido!', `**${target.user.tag}** foi banido.\nMotivo: ${motivo}`)] });
       } catch (e) { await interaction.editReply({ embeds: [errorEmbed('Erro', `${e}`)] }); }
     }
@@ -84,7 +85,7 @@ export default {
       if (!target.kickable) return interaction.editReply({ embeds: [errorEmbed('Sem permissão', 'Não consigo expulsar este membro.')] });
       try {
         await target.kick(`${interaction.user.tag}: ${motivo}`);
-        await logAction(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('🥾 Membro Expulso').addFields({ name: 'Usuário', value: `${target.user.tag}`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Motivo', value: motivo }));
+        { const kickEmbed = baseEmbed(COLORS.WARNING).setTitle('🥾 Membro Expulso').addFields({ name: 'Usuário', value: `${target.user.tag}`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Motivo', value: motivo }); applyTemplate(kickEmbed, 'mod.kick'); await logAction(guild, config.logChannelId, kickEmbed); }
         await interaction.editReply({ embeds: [successEmbed('Expulso!', `**${target.user.tag}** foi expulso.\nMotivo: ${motivo}`)] });
       } catch (e) { await interaction.editReply({ embeds: [errorEmbed('Erro', `${e}`)] }); }
     }
@@ -126,7 +127,7 @@ export default {
       await prisma.warn.create({ data: { memberId: target.id, guildId: guild.id, moderator: interaction.user.id, reason: motivo } });
       await prisma.member.upsert({ where: { discordId: target.id }, update: { warnings: { increment: 1 } }, create: { discordId: target.id, username: target.user.username, warnings: 1 } });
       const total = await prisma.warn.count({ where: { memberId: target.id, guildId: guild.id } });
-      await logAction(guild, config.logChannelId, baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${target.user.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Total de avisos', value: `${total}`, inline: true }, { name: 'Motivo', value: motivo }));
+      { const warnEmbed = baseEmbed(COLORS.WARNING).setTitle('⚠️ Membro Advertido').addFields({ name: 'Usuário', value: `${target.user.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Total de avisos', value: `${total}`, inline: true }, { name: 'Motivo', value: motivo }); applyTemplate(warnEmbed, 'mod.warn'); await logAction(guild, config.logChannelId, warnEmbed); }
       await interaction.editReply({ embeds: [successEmbed('Advertido!', `**${target.user.tag}** advertido. Total: ${total} aviso${total !== 1 ? 's' : ''}.\nMotivo: ${motivo}`)] });
     }
 

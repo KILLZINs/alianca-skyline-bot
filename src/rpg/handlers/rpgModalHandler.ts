@@ -35,6 +35,7 @@ export async function handleRpgModal(i: ModalSubmitInteraction, action: string):
           try {
             const targetUser = await i.client.users.fetch(targetIdRaw);
             const { EmbedBuilder } = await import('discord.js');
+            const { applyTemplate: applyTplProp } = await import('../../utils/embedTemplates');
             const dmEmbed = new EmbedBuilder()
               .setColor(0xFF69B4)
               .setTitle('💍 Pedido de Casamento!')
@@ -45,6 +46,7 @@ export async function handleRpgModal(i: ModalSubmitInteraction, action: string):
               )
               .setThumbnail(i.user.displayAvatarURL())
               .setFooter({ text: '⚔️ Aliança Skyline RPG — Você tem 24h para responder' });
+            applyTplProp(dmEmbed, 'rpg.marriage.proposal');
             await targetUser.send({ embeds: [dmEmbed] });
           } catch { /* DMs fechadas */ }
 

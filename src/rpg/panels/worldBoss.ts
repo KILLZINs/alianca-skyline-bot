@@ -8,6 +8,7 @@ import {
   TextInputBuilder, TextInputStyle, PermissionFlagsBits, GuildMember,
 } from 'discord.js';
 import { getActiveBoss, bossHpBar, WORLD_BOSS_TEMPLATES } from '../services/worldBoss';
+import { applyTemplate } from '../../utils/embedTemplates';
 
 // ─── Embed do boss ─────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ export async function buildWorldBossEmbed(guildId: string): Promise<EmbedBuilder
   const hoursLeft = Math.max(0, Math.floor(expiresIn / 3600000));
   const minutesLeft = Math.max(0, Math.floor((expiresIn % 3600000) / 60000));
 
-  return new EmbedBuilder()
+  const bossEmbed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${boss.emoji} Boss Mundial — ${boss.name} [Nv.${boss.level}]`)
     .setDescription(
@@ -58,6 +59,8 @@ export async function buildWorldBossEmbed(guildId: string): Promise<EmbedBuilder
       { name: '⏰ Cooldown de Ataque', value: '5 minutos por herói', inline: true },
     )
     .setFooter({ text: '⚔️ Ataque e contribua para a derrota do boss! Recompensas proporcionais ao dano.' });
+  applyTemplate(bossEmbed, 'worldboss.spawn');
+  return bossEmbed;
 }
 
 // ─── Botões do boss ────────────────────────────────────────────────────

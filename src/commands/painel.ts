@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Command } from '../types';
 import { COLORS } from '../utils/embeds';
+import { applyTemplate } from '../utils/embedTemplates';
 
 const SKYLINE_PURPLE = 0x470F78;
 
@@ -43,6 +44,7 @@ export default {
       )
       .setTimestamp()
       .setFooter({ text: `${MEMBER_PANEL_EMOJIS.footer} Aliança Skyline • painel pessoal` });
+    applyTemplate(embed, 'painel');
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('painel:perfil').setLabel('Perfil').setEmoji(MEMBER_PANEL_EMOJIS.profile).setStyle(ButtonStyle.Secondary),

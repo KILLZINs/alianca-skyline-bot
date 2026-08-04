@@ -4,6 +4,7 @@ import { prisma } from '../../database/client';
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../../utils/embeds';
 import { checkServerOwnerOrRepresentative } from '../../utils/permissions';
 import { parseDuration } from '../../utils/helpers';
+import { applyTemplate } from '../../utils/embedTemplates';
 
 export default {
   category: 'utility',
@@ -49,6 +50,7 @@ export default {
           { name: '👑 Criado por', value: `${interaction.user}`, inline: true },
         )
         .setFooter({ text: '0 participantes • ⚔️ Aliança Skyline' });
+      applyTemplate(embed, 'giveaway.start');
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`giveaway:join:${giveaway.id}`).setLabel('Participar').setEmoji('🎁').setStyle(ButtonStyle.Success),

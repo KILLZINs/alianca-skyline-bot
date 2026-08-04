@@ -8,6 +8,7 @@ import {
 import { prisma } from '../database/client';
 import { getConfig } from '../utils/helpers';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
+import { applyTemplate } from '../utils/embedTemplates';
 
 export async function handleSelect(interaction: AnySelectMenuInteraction) {
   const parts = interaction.customId.split(':');
@@ -86,6 +87,7 @@ async function ticketCategory(i: StringSelectMenuInteraction) {
   );
 
   const ping = config.modRoleId ? `<@&${config.modRoleId}>` : '';
+  applyTemplate(embed, 'ticket.create');
   await ticketCh.send({ content: `${user} ${ping}`.trim(), embeds: [embed], components: [row] });
 
   if (config.ticketLogChannelId) {
