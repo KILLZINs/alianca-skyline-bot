@@ -9,7 +9,7 @@ import {
 } from 'discord.js';
 import {
   EMBED_CATALOG, EMBED_CATEGORIES,
-  getTemplate, setTemplateField, clearTemplate,
+  getTemplate, fetchTemplate, setTemplateField, clearTemplate,
   hexToInt, intToHex,
 } from '../utils/embedTemplates';
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
@@ -110,9 +110,12 @@ function buildCategoryPanel(category: string): { embed: EmbedBuilder; rows: Acti
   return { embed, rows };
 }
 
-function buildEditPanel(key: string): { embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] } {
+// ── Constrói o painel de edição para um embed específico.
+// Usa fetchTemplate (assíncrono com fallback no DB) para garantir que os dados
+// salvos sejam exibidos corretamente mesmo quando o cache está frio após redeploy.
+async function buildEditPanel(key: string): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const info = EMBED_CATALOG[key];
-  const tpl  = getTemplate(key);
+  const tpl  = await fetchTemplate(key);
 
   // ── Pré-visualização ao vivo: mostra o embed como está agora ─────────
   // Se nenhum campo foi configurado ainda, exibe o embed com os padrões
@@ -213,7 +216,7 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
           await i.editReply({ embeds: [errorEmbed('Embed não encontrado', 'Chave `' + key + '` inválida.')] });
           return;
         }
-        const { embed, rows } = buildEditPanel(key);
+        const { embed, rows } = await buildEditPanel(key);
         await i.editReply({ embeds: [embed], components: rows });
         break;
       }
@@ -225,7 +228,9 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
           return;
         }
         const meta = FIELD_META[field];
-        const tpl  = getTemplate(key);
+        // Usa fetchTemplate (com fallback no DB) para pré-preencher o modal com o
+        // valor real salvo, mesmo que o cache ainda não tenha sido populado.
+        const tpl  = await fetchTemplate(key);
         const current = field === 'color' && tpl?.color
           ? intToHex(tpl.color)
           : ((tpl?.[field as keyof typeof tpl] ?? '') as string);
@@ -254,7 +259,7 @@ export async function handleEmbedsButtonRaw(i: ButtonInteraction): Promise<void>
         await i.deferUpdate();
         const key = rest[0];
         await clearTemplate(key);
-        const { embed, rows } = buildEditPanel(key);
+        const { embed, rows } = await buildEditPanel(key);
         await i.editReply({ embeds: [successEmbed('✅ Resetado', 'Template `' + key + '` restaurado para o padrão.'), embed], components: rows });
         break;
       }
@@ -307,7 +312,7 @@ export async function handleEmbedCfgModal(i: ModalSubmitInteraction, raw: string
       await setTemplateField(key, field as any, rawValue);
     }
 
-    const { embed, rows } = buildEditPanel(key);
+    const { embed, rows } = await buildEditPanel(key);
     await i.editReply({ embeds: [successEmbed('✅ Salvo', 'Campo **' + (FIELD_META[field]?.label ?? field) + '** atualizado!'), embed], components: rows });
   }
 }

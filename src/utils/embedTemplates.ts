@@ -94,8 +94,28 @@ export async function loadEmbedTemplates(): Promise<void> {
   }
 }
 
+/** Leitura síncrona do cache em memória (útil para applyTemplate em runtime). */
 export function getTemplate(key: string): EmbedTemplateData | undefined {
   return _cache.get(key);
+}
+
+/**
+ * Leitura assíncrona com fallback no banco de dados.
+ * Use nos painéis de edição (/embeds) para garantir que o template
+ * correto seja exibido mesmo quando o cache ainda não foi populado
+ * (ex.: logo após um redeploy no Railway).
+ */
+export async function fetchTemplate(key: string): Promise<EmbedTemplateData | undefined> {
+  if (_cache.has(key)) return _cache.get(key);
+  try {
+    const row = await prisma.embedTemplate.findUnique({ where: { key } });
+    if (row) {
+      const cast = row as EmbedTemplateData;
+      _cache.set(key, cast);
+      return cast;
+    }
+  } catch { /* ignora erros de DB — retorna undefined */ }
+  return undefined;
 }
 
 export function applyTemplate(embed: EmbedBuilder, key: string): EmbedBuilder {
