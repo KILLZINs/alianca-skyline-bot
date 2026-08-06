@@ -91,6 +91,7 @@ model AchievementTemplate {
 model Ticket {
   id        String    @id @default(cuid())
   channelId String    @unique
+  guildId   String?
   authorId  String
   claimedBy String?
   category  String    @default("geral")
@@ -758,6 +759,17 @@ model VipConfig {
   @@map("vip_configs")
 }
 
+model VipGuildConfig {
+  id                       String   @id @default(cuid())
+  guildId                  String   @unique
+  gradientTicketCategoryId String?
+  defaultFavoriteLimit     Int      @default(3)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("vip_guild_configs")
+}
+
 model VipRole {
   id             String   @id @default(cuid())
   guildId        String
@@ -765,6 +777,7 @@ model VipRole {
   personalRoleId String?
   favRoleId      String?
   favMembers     String[] @default([])
+  favoriteLimit  Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -758,7 +758,7 @@ export async function handleAllianceModal(i: ModalSubmitInteraction, action: str
       const allianceEmbed = await buildOfficialAllianceEmbed(i.client);
       const msg           = await ch.send({ embeds: [allianceEmbed] });
       await prisma.allianceEmbed.create({
-        data: { guildId: guild!.id, channelId, messageId: msg.id, sentBy: i.user.id },
+        data: { guildId: guild!.id, channelId, messageId: msg.id },
       });
       return i.editReply({ embeds: [successEmbed('Embed Enviado', `Embed oficial enviado em <#${channelId}>!`)] });
     }

@@ -23,10 +23,11 @@ import {
   ModalBuilder, TextInputBuilder, TextInputStyle,
   UserSelectMenuBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
   RoleSelectMenuBuilder, RoleSelectMenuInteraction,
-  PermissionFlagsBits,
+  PermissionFlagsBits, ChannelType,
 } from 'discord.js';
 import { prisma } from '../database/client';
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
+import { createTicketForUser, findOpenTicket } from '../utils/ticketCreation';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,11 @@ export async function buildVipPanel(
   const personalRole  = vipRole?.personalRoleId  ? guild.roles.cache.get(vipRole.personalRoleId)  : null;
   const favRole       = vipRole?.favRoleId        ? guild.roles.cache.get(vipRole.favRoleId)        : null;
   const favMembers    = vipRole?.favMembers ?? [];
+  const vipGuildConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: guild.id } });
+  const favoriteLimit = vipRole?.favoriteLimit ?? vipGuildConfig?.defaultFavoriteLimit ?? 3;
+  const gradientCategory = vipGuildConfig?.gradientTicketCategoryId
+    ? guild.channels.cache.get(vipGuildConfig.gradientTicketCategoryId)
+    : null;
 
   const embed = new EmbedBuilder()
     .setColor(0x9B59B6)
@@ -74,7 +80,8 @@ export async function buildVipPanel(
       '\n\n**👥 Membros no Cargo de Favoritos**\n' +
       (favMembers.length
         ? favMembers.map(id => `<@${id}>`).join(', ')
-        : '*(nenhum)*'),
+        : '*(nenhum)*') +
+      `\n\n**Limite de favoritos:** ${favMembers.length}/${favoriteLimit}`,
     )
     .setFooter({ text: '⚔️ Aliança Skyline • Sistema VIP' })
     .setTimestamp();
@@ -97,13 +104,21 @@ export async function buildVipPanel(
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!favRole),
     new ButtonBuilder()
+      .setCustomId('vip:gradient_ticket:' + userId)
+      .setLabel('🎨 Personalizar Gradiente')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!gradientCategory || gradientCategory.type !== ChannelType.GuildCategory),
+  );
+
+  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
       .setCustomId('vip:delete_confirm:' + userId)
       .setLabel('🗑️ Excluir Meus Cargos')
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!personalRole && !favRole),
   );
 
-  return { embed, rows: [row1, row2] };
+  return { embed, rows: [row1, row2, row3] };
 }
 
 // ── Painel de configuração (admin) ────────────────────────────────────────────
@@ -208,6 +223,37 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
   // Apenas o próprio usuário pode gerenciar seus cargos
   if (targetUserId !== i.user.id) {
     return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Você só pode gerenciar seus próprios cargos VIP.')], ephemeral: true });
+  }
+
+  if (action === 'gradient_ticket') {
+    const vipConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } });
+    const categoryId = vipConfig?.gradientTicketCategoryId;
+    const category = categoryId ? i.guild.channels.cache.get(categoryId) : null;
+    if (!categoryId || !category || category.type !== ChannelType.GuildCategory) {
+      return void i.reply({
+        embeds: [errorEmbed('Gradiente não configurado', 'A categoria de tickets para personalização ainda não foi configurada pelos responsáveis do servidor.')],
+        ephemeral: true,
+      });
+    }
+
+    const existing = await findOpenTicket(i.guild, i.user.id);
+    if (existing) {
+      const channel = i.guild.channels.cache.get(existing.channelId);
+      return void i.reply({
+        embeds: [errorEmbed('Ticket Existente', channel ? `Você já tem um ticket aberto: ${channel}` : 'Você já tem um ticket aberto.')],
+        ephemeral: true,
+      });
+    }
+
+    await i.deferReply({ ephemeral: true });
+    const { success } = await createTicketForUser(i.guild, i.user, 'vip_gradiente', {
+      parentId: categoryId,
+      title: '🎨 Personalização de Gradiente',
+      description:
+        `Olá ${i.user}! Este ticket é para solicitar um cargo VIP com cor em gradiente.\n\n` +
+        'Envie as duas ou mais cores desejadas, o nome do cargo e qualquer referência visual. A equipe vai aplicar o gradiente manualmente.',
+    });
+    return void i.editReply({ embeds: [success] });
   }
 
   // ── Abrir modal: cargo pessoal ─────────────────────────────────────────────
@@ -540,6 +586,14 @@ export async function handleVipSelect(i: AnySelectMenuInteraction, action: strin
         data:   { favMembers: { set: vipData.favMembers.filter(id => id !== targetId) } },
       });
     } else {
+      const vipConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } });
+      const favoriteLimit = vipData.favoriteLimit ?? vipConfig?.defaultFavoriteLimit ?? 3;
+      if (vipData.favMembers.length >= favoriteLimit) {
+        return void i.editReply({
+          embeds: [errorEmbed('Limite de Favoritos Atingido', `Seu limite atual é de **${favoriteLimit}** favorito(s). Fale com os responsáveis para adquirir slots adicionais.`)],
+        });
+      }
+
       // Adicionar
       await targetMember.roles.add(favRole.id).catch(() => null);
       await prisma.vipRole.update({

@@ -9,6 +9,7 @@ import { prisma } from '../database/client';
 import { getConfig } from '../utils/helpers';
 import { COLORS, EMOJIS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
 import { applyTemplate } from '../utils/embedTemplates';
+import { createTicketForUser, findOpenTicket, removeStaleTicket } from '../utils/ticketCreation';
 
 export async function handleSelect(interaction: AnySelectMenuInteraction) {
   const parts = interaction.customId.split(':');
@@ -38,67 +39,15 @@ async function ticketCategory(i: StringSelectMenuInteraction) {
   const guild = i.guild!;
   const user = i.user;
 
-  const existing = await prisma.ticket.findFirst({ where: { authorId: user.id, status: 'open' } });
+  const existing = await findOpenTicket(guild, user.id);
   if (existing) {
     const ch = guild.channels.cache.get(existing.channelId);
     if (ch) return i.editReply({ embeds: [errorEmbed('Ticket Existente', `Você já tem um ticket aberto: ${ch}`)] });
-    await prisma.ticket.delete({ where: { id: existing.id } });
+    await removeStaleTicket(existing.id);
   }
 
-  const config = await getConfig(guild.id);
-
-  const labels: Record<string, string> = {
-    suporte: '🛠️ Suporte Geral', parceria: '🤝 Parceria',
-    reporte: '🚨 Reporte', candidatura: '📋 Candidatura', outro: '❓ Outro',
-  };
-
-  const channelName = `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}-${category}`;
-
-  const ticketCh = await guild.channels.create({
-    name: channelName,
-    type: ChannelType.GuildText,
-    parent: config.ticketCategoryId ?? undefined,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
-      ...(config.modRoleId ? [{ id: config.modRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
-      ...(config.adminRoleId ? [{ id: config.adminRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
-    ],
-  });
-
-  const ticket = await prisma.ticket.create({ data: { channelId: ticketCh.id, authorId: user.id, category } });
-
-  const embed = baseEmbed()
-    .setTitle(`${EMOJIS.TICKET} ${labels[category] ?? category}`)
-    .setDescription(
-      `⚔ Seu **ticket** foi aberto com sucesso, ${user}! Mande uma mensagem explicando melhor o ` +
-      `motivo de você ter aberto o ticket. Após isso, só aguardar alguém da equipe ` +
-      `${config.modRoleId ? `<@&${config.modRoleId}>` : 'suporte'} te atender.`
-    )
-    .addFields(
-      { name: '📌 Autor',    value: `${user} (${user.id})`,              inline: true },
-      { name: '🏷️ Categoria', value: labels[category] ?? category, inline: true },
-    )
-    .setTimestamp();
-
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`ticket:claim:${ticket.id}`).setLabel('Assumir Ticket').setEmoji('✋').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`ticket:info:${ticket.id}`).setLabel('Informações').setEmoji('ℹ️').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`ticket:painel_staff:${ticket.id}`).setLabel('Painel Staff').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
-  );
-
-  const ping = config.modRoleId ? `<@&${config.modRoleId}>` : '';
-  applyTemplate(embed, 'ticket.create');
-  await ticketCh.send({ content: `${user} ${ping}`.trim(), embeds: [embed], components: [row] });
-
-  if (config.ticketLogChannelId) {
-    const logCh = guild.channels.cache.get(config.ticketLogChannelId) as TextChannel | undefined;
-    if (logCh) {
-      await logCh.send({ embeds: [baseEmbed(COLORS.INFO).setTitle('🎫 Novo Ticket').addFields({ name: 'Autor', value: `${user} (${user.id})`, inline: true }, { name: 'Categoria', value: labels[category] ?? category, inline: true }, { name: 'Canal', value: `${ticketCh}`, inline: true })] });
-    }
-  }
-
-  await i.editReply({ embeds: [successEmbed('Ticket Criado!', `Seu ticket foi aberto em ${ticketCh}`)] });
+  const { success } = await createTicketForUser(guild, user, category);
+  await i.editReply({ embeds: [success] });
 }
 
 // ── Ticket Staff Panel ────────────────────────────────────────────────────────

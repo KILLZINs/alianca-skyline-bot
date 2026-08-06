@@ -14,7 +14,6 @@ import { xpForNextLevel, RANKS } from '../types';
 import { checkAdmin, checkModerator } from '../utils/permissions';
 import { ensureDailyMissions } from '../commands/utility/missoes';
 import { isBotOwner, isBotManager, isEnforcementActive, allowedGuildCount, getOwnerIds, cacheAddGuild, cacheRemoveGuild, cacheAddManager, cacheRemoveManager } from '../utils/allowlist';
-import { applyTemplate } from '../utils/embedTemplates';
 import { getBotConfig, updateBotConfig } from '../utils/botConfig';
 
 export async function handleButton(interaction: ButtonInteraction) {
