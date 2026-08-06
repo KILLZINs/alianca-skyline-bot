@@ -23,6 +23,7 @@ import {
   ModalBuilder, TextInputBuilder, TextInputStyle,
   UserSelectMenuBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
   RoleSelectMenuBuilder, RoleSelectMenuInteraction,
+  ChannelSelectMenuBuilder, ChannelSelectMenuInteraction,
   PermissionFlagsBits, ChannelType,
 } from 'discord.js';
 import { prisma } from '../database/client';
@@ -153,7 +154,30 @@ export async function buildVipAdminPanel(
       .setDisabled(configs.length === 0),
   );
 
-  return { embed, rows: [row] };
+  const configRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('vip:admin_status')
+      .setLabel('📋 Status')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('vip:admin_limit')
+      .setLabel('⭐ Limite Padrão')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('vip:admin_category')
+      .setLabel('🎨 Categoria')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('vip:admin_user_limit')
+      .setLabel('👤 Limite Individual')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('vip:admin_user_reset')
+      .setLabel('↩️ Resetar Limite')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  return { embed, rows: [row, configRow] };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -162,6 +186,96 @@ export async function buildVipAdminPanel(
 
 export async function handleVipButton(i: ButtonInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
+
+  // ── Configuração VIP: status ───────────────────────────────────────────────
+  if (action === 'admin_status') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const [config, overrides] = await Promise.all([
+      prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } }),
+      prisma.vipRole.count({ where: { guildId: i.guild.id, favoriteLimit: { not: null } } }),
+    ]);
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    const status = successEmbed(
+      'Configuração VIP',
+      `**Limite padrão de favoritos:** ${config?.defaultFavoriteLimit ?? 3}\n` +
+        `**Categoria de gradiente:** ${config?.gradientTicketCategoryId ? `<#${config.gradientTicketCategoryId}>` : 'Não configurada'}\n` +
+        `**Limites individuais:** ${overrides} usuário(s)`,
+    );
+    return void i.editReply({ embeds: [status, embed], components: rows });
+  }
+
+  // ── Configuração VIP: abrir modal do limite padrão ──────────────────────────
+  if (action === 'admin_limit') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    const current = await prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } });
+    const modal = new ModalBuilder()
+      .setCustomId('vip_modal:admin_limit')
+      .setTitle('⭐ Limite Padrão de Favoritos')
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('quantity')
+            .setLabel('Quantidade máxima por VIP')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMinLength(1)
+            .setMaxLength(3)
+            .setValue(String(current?.defaultFavoriteLimit ?? 3)),
+        ),
+      );
+    return void i.showModal(modal);
+  }
+
+  // ── Configuração VIP: selecionar categoria de tickets ───────────────────────
+  if (action === 'admin_category') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const select = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+      new ChannelSelectMenuBuilder()
+        .setCustomId('vip_select:admin_category')
+        .setPlaceholder('Selecione a categoria dos tickets...')
+        .setChannelTypes(ChannelType.GuildCategory)
+        .setMinValues(1)
+        .setMaxValues(1),
+    );
+    return void i.editReply({
+      embeds: [new EmbedBuilder().setColor(COLORS.INFO).setTitle('🎨 Categoria dos Tickets').setDescription('Selecione a categoria onde os tickets de personalização serão criados.')],
+      components: [select],
+    });
+  }
+
+  // ── Configuração VIP: selecionar usuário para limite/reset ──────────────────
+  if (action === 'admin_user_limit' || action === 'admin_user_reset') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const select = new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+      new UserSelectMenuBuilder()
+        .setCustomId(`vip_select:${action}`)
+        .setPlaceholder('Selecione o usuário VIP...')
+        .setMinValues(1)
+        .setMaxValues(1),
+    );
+    return void i.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(action === 'admin_user_limit' ? COLORS.INFO : COLORS.WARNING)
+          .setTitle(action === 'admin_user_limit' ? '👤 Limite Individual' : '↩️ Resetar Limite Individual')
+          .setDescription(action === 'admin_user_limit'
+            ? 'Selecione o usuário que receberá um limite personalizado de favoritos.'
+            : 'Selecione o usuário que voltará a usar o limite padrão do servidor.'),
+      ],
+      components: [select],
+    });
+  }
 
   // ── Admin: adicionar cargo VIP ─────────────────────────────────────────────
   if (action === 'admin_add') {
@@ -427,6 +541,44 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
 export async function handleVipModal(i: ModalSubmitInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
 
+  if (action === 'admin_limit' || action === 'admin_user_limit') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    const quantity = Number.parseInt(i.fields.getTextInputValue('quantity').trim(), 10);
+    if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100) {
+      return void i.reply({ embeds: [errorEmbed('Quantidade inválida', 'Informe um número inteiro entre 0 e 100.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    if (action === 'admin_limit') {
+      await prisma.vipGuildConfig.upsert({
+        where: { guildId: i.guild.id },
+        update: { defaultFavoriteLimit: quantity },
+        create: { guildId: i.guild.id, defaultFavoriteLimit: quantity },
+      });
+      const { embed, rows } = await buildVipAdminPanel(i.guild);
+      return void i.editReply({
+        embeds: [successEmbed('Limite Padrão Atualizado', `O limite padrão agora é de **${quantity}** favorito(s) por usuário VIP.`), embed],
+        components: rows,
+      });
+    }
+
+    const targetId = extra[0];
+    if (!targetId) {
+      return void i.editReply({ embeds: [errorEmbed('Usuário não encontrado', 'Selecione novamente o usuário VIP.')], components: [] });
+    }
+    await prisma.vipRole.upsert({
+      where: { guildId_userId: { guildId: i.guild.id, userId: targetId } },
+      update: { favoriteLimit: quantity },
+      create: { guildId: i.guild.id, userId: targetId, favoriteLimit: quantity },
+    });
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    return void i.editReply({
+      embeds: [successEmbed('Limite Individual Atualizado', `<@${targetId}> agora pode ter até **${quantity}** favorito(s).`), embed],
+      components: rows,
+    });
+  }
+
   if (!(await isVip(i.guild, i.user.id))) {
     return void i.reply({ embeds: [errorEmbed('Sem Acesso VIP', 'Você não possui cargo VIP neste servidor.')], ephemeral: true });
   }
@@ -514,6 +666,66 @@ export async function handleVipModal(i: ModalSubmitInteraction, action: string, 
 
 export async function handleVipSelect(i: AnySelectMenuInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
+
+  if (action === 'admin_category') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const category = (i as ChannelSelectMenuInteraction).channels.first();
+    if (!category || category.type !== ChannelType.GuildCategory) {
+      return void i.editReply({ embeds: [errorEmbed('Categoria inválida', 'Selecione uma categoria de canais do Discord.')], components: [] });
+    }
+    await prisma.vipGuildConfig.upsert({
+      where: { guildId: i.guild.id },
+      update: { gradientTicketCategoryId: category.id },
+      create: { guildId: i.guild.id, gradientTicketCategoryId: category.id },
+    });
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    return void i.editReply({
+      embeds: [successEmbed('Categoria Configurada', `Os tickets de personalização de gradiente serão criados em ${category}.`), embed],
+      components: rows,
+    });
+  }
+
+  if (action === 'admin_user_limit') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    const targetId = (i as UserSelectMenuInteraction).values[0];
+    const modal = new ModalBuilder()
+      .setCustomId(`vip_modal:admin_user_limit:${targetId}`)
+      .setTitle('👤 Limite Individual')
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('quantity')
+            .setLabel('Quantidade máxima de favoritos')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMinLength(1)
+            .setMaxLength(3),
+        ),
+      );
+    return void i.showModal(modal);
+  }
+
+  if (action === 'admin_user_reset') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const targetId = (i as UserSelectMenuInteraction).values[0];
+    await prisma.vipRole.updateMany({
+      where: { guildId: i.guild.id, userId: targetId },
+      data: { favoriteLimit: null },
+    });
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    return void i.editReply({
+      embeds: [successEmbed('Limite Individual Removido', `<@${targetId}> voltou a usar o limite padrão do servidor.`), embed],
+      components: rows,
+    });
+  }
 
   // ── Admin: adicionar cargo VIP ─────────────────────────────────────────────
   if (action === 'admin_add_role') {
