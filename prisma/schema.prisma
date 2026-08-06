@@ -770,6 +770,18 @@ model VipGuildConfig {
   @@map("vip_guild_configs")
 }
 
+model VipFavoriteLimitRole {
+  id              String   @id @default(cuid())
+  guildId         String
+  roleId          String
+  additionalLimit Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, roleId])
+  @@map("vip_favorite_limit_roles")
+}
+
 model VipRole {
   id             String   @id @default(cuid())
   guildId        String

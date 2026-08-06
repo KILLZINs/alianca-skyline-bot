@@ -11,6 +11,8 @@
 //  /vip config (admin) → buildVipAdminPanel
 //    [➕ Adicionar VIP]  → RoleSelect → salva role como VIP
 //    [➖ Remover VIP]    → StringSelect das roles configuradas → remove
+//    [➕ Cargo + Slots]   → RoleSelect + modal → salva slots extras por cargo
+//    [➖ Remover + Slots] → StringSelect → remove cargo de slots extras
 //
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -52,6 +54,26 @@ async function isAdmin(guild: Guild, userId: string): Promise<boolean> {
   return member.permissions.has(PermissionFlagsBits.ManageGuild) || guild.ownerId === userId;
 }
 
+async function getFavoriteLimit(guild: Guild, userId: string, vipRole?: Awaited<ReturnType<typeof prisma.vipRole.findUnique>>): Promise<number> {
+  if (vipRole?.favoriteLimit !== null && vipRole?.favoriteLimit !== undefined) {
+    return vipRole.favoriteLimit;
+  }
+
+  const [config, member, limitRoles] = await Promise.all([
+    prisma.vipGuildConfig.findUnique({ where: { guildId: guild.id } }),
+    guild.members.fetch(userId).catch(() => null),
+    prisma.vipFavoriteLimitRole.findMany({ where: { guildId: guild.id } }),
+  ]);
+
+  const additionalLimit = member
+    ? limitRoles
+        .filter(limitRole => member.roles.cache.has(limitRole.roleId))
+        .reduce((total, limitRole) => total + limitRole.additionalLimit, 0)
+    : 0;
+
+  return (config?.defaultFavoriteLimit ?? 3) + additionalLimit;
+}
+
 // ── Painel principal VIP ──────────────────────────────────────────────────────
 
 export async function buildVipPanel(
@@ -64,7 +86,7 @@ export async function buildVipPanel(
   const favRole       = vipRole?.favRoleId        ? guild.roles.cache.get(vipRole.favRoleId)        : null;
   const favMembers    = vipRole?.favMembers ?? [];
   const vipGuildConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: guild.id } });
-  const favoriteLimit = vipRole?.favoriteLimit ?? vipGuildConfig?.defaultFavoriteLimit ?? 3;
+  const favoriteLimit = await getFavoriteLimit(guild, userId, vipRole);
   const gradientCategory = vipGuildConfig?.gradientTicketCategoryId
     ? guild.channels.cache.get(vipGuildConfig.gradientTicketCategoryId)
     : null;
@@ -127,8 +149,17 @@ export async function buildVipPanel(
 export async function buildVipAdminPanel(
   guild: Guild,
 ): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
-  const configs = await prisma.vipConfig.findMany({ where: { guildId: guild.id } });
-  const roles   = configs.map(c => guild.roles.cache.get(c.roleId)).filter(Boolean);
+  const [configs, limitConfigs] = await Promise.all([
+    prisma.vipConfig.findMany({ where: { guildId: guild.id } }),
+    prisma.vipFavoriteLimitRole.findMany({ where: { guildId: guild.id } }),
+  ]);
+  const roles = configs.map(c => guild.roles.cache.get(c.roleId)).filter(Boolean);
+  const limitRoles = limitConfigs
+    .map(config => {
+      const role = guild.roles.cache.get(config.roleId);
+      return role ? `${role} (+${config.additionalLimit})` : null;
+    })
+    .filter((role): role is string => role !== null);
 
   const embed = new EmbedBuilder()
     .setColor(0x9B59B6)
@@ -137,7 +168,9 @@ export async function buildVipAdminPanel(
       'Cargos abaixo dão acesso ao sistema VIP.\n' +
       'Membros com estes cargos poderão criar seus próprios cargos personalizados.\n\n' +
       '**Cargos VIP configurados:**\n' +
-      (roles.length ? roles.map(r => `• ${r}`).join('\n') : '*(nenhum configurado)*'),
+      (roles.length ? roles.map(r => `• ${r}`).join('\n') : '*(nenhum configurado)*') +
+      '\n\n**Cargos com slots adicionais:**\n' +
+      (limitRoles.length ? limitRoles.map(role => `• ${role} slots`).join('\n') : '*(nenhum configurado)*'),
     )
     .setFooter({ text: '⚔️ Aliança Skyline • Config VIP' })
     .setTimestamp();
@@ -177,7 +210,19 @@ export async function buildVipAdminPanel(
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embed, rows: [row, configRow] };
+  const limitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('vip:admin_add_limit_role')
+      .setLabel('➕ Cargo + Slots')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('vip:admin_remove_limit_role')
+      .setLabel('➖ Remover + Slots')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(limitConfigs.length === 0),
+  );
+
+  return { embed, rows: [row, configRow, limitRow] };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -247,6 +292,54 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
     );
     return void i.editReply({
       embeds: [new EmbedBuilder().setColor(COLORS.INFO).setTitle('🎨 Categoria dos Tickets').setDescription('Selecione a categoria onde os tickets de personalização serão criados.')],
+      components: [select],
+    });
+  }
+
+  // ── Configuração VIP: adicionar cargo com slots extras ───────────────────────
+  if (action === 'admin_add_limit_role') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const select = new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
+      new RoleSelectMenuBuilder()
+        .setCustomId('vip_select:admin_add_limit_role')
+        .setPlaceholder('Selecione o cargo que dará slots extras...')
+        .setMinValues(1)
+        .setMaxValues(1),
+    );
+    return void i.editReply({
+      embeds: [new EmbedBuilder().setColor(COLORS.INFO).setTitle('➕ Cargo com Slots Adicionais').setDescription('Selecione o cargo que concederá slots extras de favoritos.')],
+      components: [select],
+    });
+  }
+
+  // ── Configuração VIP: remover cargo com slots extras ─────────────────────────
+  if (action === 'admin_remove_limit_role') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const limitConfigs = await prisma.vipFavoriteLimitRole.findMany({ where: { guildId: i.guild.id } });
+    if (!limitConfigs.length) {
+      return void i.editReply({ embeds: [errorEmbed('Nenhum cargo configurado', 'Não há cargos com slots adicionais configurados.')], components: [] });
+    }
+    const options = limitConfigs.map(config => {
+      const role = i.guild!.roles.cache.get(config.roleId);
+      return new StringSelectMenuOptionBuilder()
+        .setValue(config.roleId)
+        .setLabel(role?.name ?? config.roleId)
+        .setDescription(`+${config.additionalLimit} slot(s)`);
+    });
+    const select = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('vip_select:admin_remove_limit_role')
+        .setPlaceholder('Selecione o cargo para remover...')
+        .addOptions(options),
+    );
+    return void i.editReply({
+      embeds: [new EmbedBuilder().setColor(COLORS.WARNING).setTitle('➖ Remover Cargo com Slots').setDescription('Selecione o cargo que deixará de conceder slots adicionais.')],
       components: [select],
     });
   }
@@ -541,6 +634,31 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
 export async function handleVipModal(i: ModalSubmitInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
 
+  if (action === 'admin_limit_role') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    const quantity = Number.parseInt(i.fields.getTextInputValue('quantity').trim(), 10);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      return void i.reply({ embeds: [errorEmbed('Quantidade inválida', 'Informe um número inteiro entre 1 e 100.')], ephemeral: true });
+    }
+    const roleId = extra[0];
+    if (!roleId) {
+      return void i.reply({ embeds: [errorEmbed('Cargo não encontrado', 'Selecione novamente o cargo que dará slots extras.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    await prisma.vipFavoriteLimitRole.upsert({
+      where: { guildId_roleId: { guildId: i.guild.id, roleId } },
+      update: { additionalLimit: quantity },
+      create: { guildId: i.guild.id, roleId, additionalLimit: quantity },
+    });
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    return void i.editReply({
+      embeds: [successEmbed('Cargo de Slots Configurado', `<@&${roleId}> agora concede **+${quantity}** slot(s) de favoritos.`), embed],
+      components: rows,
+    });
+  }
+
   if (action === 'admin_limit' || action === 'admin_user_limit') {
     if (!(await isAdmin(i.guild, i.user.id))) {
       return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
@@ -688,6 +806,46 @@ export async function handleVipSelect(i: AnySelectMenuInteraction, action: strin
     });
   }
 
+  if (action === 'admin_add_limit_role') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    const roleId = (i as RoleSelectMenuInteraction).values[0];
+    const current = await prisma.vipFavoriteLimitRole.findUnique({
+      where: { guildId_roleId: { guildId: i.guild.id, roleId } },
+    });
+    const modal = new ModalBuilder()
+      .setCustomId(`vip_modal:admin_limit_role:${roleId}`)
+      .setTitle('➕ Slots Adicionais')
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('quantity')
+            .setLabel('Quantidade de slots adicionais')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMinLength(1)
+            .setMaxLength(3)
+            .setValue(String(current?.additionalLimit ?? 1)),
+        ),
+      );
+    return void i.showModal(modal);
+  }
+
+  if (action === 'admin_remove_limit_role') {
+    if (!(await isAdmin(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
+    }
+    await i.deferUpdate();
+    const roleId = (i as StringSelectMenuInteraction).values[0];
+    await prisma.vipFavoriteLimitRole.deleteMany({ where: { guildId: i.guild.id, roleId } });
+    const { embed, rows } = await buildVipAdminPanel(i.guild);
+    return void i.editReply({
+      embeds: [successEmbed('Cargo de Slots Removido', `<@&${roleId}> não concederá mais slots adicionais.`), embed],
+      components: rows,
+    });
+  }
+
   if (action === 'admin_user_limit') {
     if (!(await isAdmin(i.guild, i.user.id))) {
       return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
@@ -798,8 +956,7 @@ export async function handleVipSelect(i: AnySelectMenuInteraction, action: strin
         data:   { favMembers: { set: vipData.favMembers.filter(id => id !== targetId) } },
       });
     } else {
-      const vipConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } });
-      const favoriteLimit = vipData.favoriteLimit ?? vipConfig?.defaultFavoriteLimit ?? 3;
+      const favoriteLimit = await getFavoriteLimit(i.guild, i.user.id, vipData);
       if (vipData.favMembers.length >= favoriteLimit) {
         return void i.editReply({
           embeds: [errorEmbed('Limite de Favoritos Atingido', `Seu limite atual é de **${favoriteLimit}** favorito(s). Fale com os responsáveis para adquirir slots adicionais.`)],
