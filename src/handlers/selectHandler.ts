@@ -22,6 +22,7 @@ export async function handleSelect(interaction: AnySelectMenuInteraction) {
     if (prefix === 'selfrole' && action === 'add')    return await selfRoleAdd(interaction as StringSelectMenuInteraction);
     if (prefix === 'selfrole' && action === 'remove') return await selfRoleRemove(interaction as StringSelectMenuInteraction);
     if (prefix === 'selfrole_admin') return await selfRoleAdminSelect(interaction, action, parts);
+    if (prefix === 'vip_select')     return await (await import('./vipHandler')).handleVipSelect(interaction, action, parts.slice(2));
   } catch (err) {
     console.error('Select error:', err);
     const e = errorEmbed('Erro', 'Ocorreu um erro ao processar esta ação.');

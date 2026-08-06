@@ -49,6 +49,7 @@ export async function handleButton(interaction: ButtonInteraction) {
       case 'selfrole':       return await selfRoleToggle(interaction, extra);
       case 'selfrole_admin': return await selfRoleAdminButtons(interaction, action, extra);
       case 'ticket_fb':     return await ticketFeedbackButton(interaction, action, extra);
+      case 'vip':           return await (await import('./vipHandler')).handleVipButton(interaction, action, extra);
     }
   } catch (err) {
     console.error('Button error:', err);

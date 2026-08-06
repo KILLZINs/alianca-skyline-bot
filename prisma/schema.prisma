@@ -747,3 +747,27 @@ model AfkStatus {
 
   @@map("afk_status")
 }
+
+model VipConfig {
+  id        String   @id @default(cuid())
+  guildId   String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, roleId])
+  @@map("vip_configs")
+}
+
+model VipRole {
+  id             String   @id @default(cuid())
+  guildId        String
+  userId         String
+  personalRoleId String?
+  favRoleId      String?
+  favMembers     String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([guildId, userId])
+  @@map("vip_roles")
+}
