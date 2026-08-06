@@ -13,6 +13,7 @@ import {
   hexToInt, intToHex,
 } from '../utils/embedTemplates';
 import { COLORS, baseEmbed, successEmbed, errorEmbed } from '../utils/embeds';
+import { buildBaseEmbed } from '../utils/embedPreviews';
 import { isBotManager } from '../utils/allowlist';
 
 // ──── Tipos dos campos configuráveis ────────────────────────────────────────────────────────────────────────────────────────
@@ -110,36 +111,45 @@ function buildCategoryPanel(category: string): { embed: EmbedBuilder; rows: Acti
   return { embed, rows };
 }
 
-// ── Constrói o painel de edição para um embed específico.
-// Usa fetchTemplate (assíncrono com fallback no DB) para garantir que os dados
-// salvos sejam exibidos corretamente mesmo quando o cache está frio após redeploy.
+/**
+ * Constrói o painel de edição para um embed específico.
+ *
+ * Estratégia do preview:
+ * 1. Usa buildBaseEmbed(key) para montar o embed com a estrutura real do bot
+ *    (todos os campos, thumbnail, rodapé, cor original, etc.)
+ * 2. Aplica os overrides salvos no template por cima (fetchTemplate com fallback no DB)
+ * 3. Se não há base definida, cai no fallback do catálogo (label + desc)
+ *
+ * Isso garante que o preview reflita exatamente como o embed ficará depois
+ * das customizações, inclusive mostrando a estrutura correta ao editar pela
+ * primeira vez.
+ */
 async function buildEditPanel(key: string): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const info = EMBED_CATALOG[key];
   const tpl  = await fetchTemplate(key);
 
-  // ── Pré-visualização ao vivo: mostra o embed como está agora ─────────
-  // Se nenhum campo foi configurado ainda, exibe o embed com os padrões
-  // reais do bot (o que o usuário veria antes de fazer qualquer alteração).
-  const embed = new EmbedBuilder();
+  // ── 1. Ponto de partida: embed base real do bot (ou fallback do catálogo) ─────
+  const base = buildBaseEmbed(key);
+  const embed = base ?? new EmbedBuilder()
+    .setColor(COLORS.PRIMARY)
+    .setTitle(info?.label ?? key)
+    .setDescription(info?.desc ?? null);
 
-  // Cor: salva como inteiro no DB; sem config → cor padrão PRIMARY
-  embed.setColor((tpl?.color ?? COLORS.PRIMARY) as number);
+  // ── 2. Aplica overrides do template por cima da base ─────────────────────────
+  if (tpl) {
+    if (tpl.color !== null && tpl.color !== undefined) embed.setColor(tpl.color);
+    if (tpl.title)        embed.setTitle(tpl.title);
+    if (tpl.description)  embed.setDescription(tpl.description);
+    if (tpl.thumbnailUrl) embed.setThumbnail(tpl.thumbnailUrl);
+    if (tpl.imageUrl)     embed.setImage(tpl.imageUrl);
 
-  // Título: configurado → usa; sem config → label do catálogo (estado real padrão)
-  embed.setTitle(tpl?.title ?? (info?.label ?? key));
-
-  // Descrição: configurada → usa; sem config → descrição do catálogo (o que é esse embed)
-  const defaultDesc = info?.desc ?? null;
-  embed.setDescription(tpl?.description ?? defaultDesc);
-
-  // Thumbnail e imagem
-  if (tpl?.thumbnailUrl) embed.setThumbnail(tpl.thumbnailUrl);
-  if (tpl?.imageUrl)     embed.setImage(tpl.imageUrl);
-
-  // Rodapé: configurado → usa; sem config → padrão do bot
-  const footerText = tpl?.footerText ?? '⚔️ Aliança Skyline';
-  const footerIcon = tpl?.footerIcon ?? undefined;
-  embed.setFooter(footerIcon ? { text: footerText, iconURL: footerIcon } : { text: footerText });
+    if (tpl.footerText && tpl.footerIcon)  embed.setFooter({ text: tpl.footerText, iconURL: tpl.footerIcon });
+    else if (tpl.footerText)               embed.setFooter({ text: tpl.footerText });
+    else if (tpl.footerIcon) {
+      const existing = embed.data.footer;
+      if (existing?.text) embed.setFooter({ text: existing.text, iconURL: tpl.footerIcon });
+    }
+  }
 
   const rows: ActionRowBuilder<ButtonBuilder>[] = [
     // Linha 1: title, description, color
