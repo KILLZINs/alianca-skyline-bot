@@ -13,13 +13,14 @@
 //    [➖ Remover VIP]    → StringSelect das roles configuradas → remove
 //    [➕ Cargo + Slots]   → RoleSelect + modal → salva slots extras por cargo
 //    [➖ Remover + Slots] → StringSelect → remove cargo de slots extras
+//    [😀 Personalizar Ícone] → escolhe cargo → modal com emoji Unicode ou URL
 //
 // ════════════════════════════════════════════════════════════════════════════
 
 import {
   ButtonInteraction, ModalSubmitInteraction,
   UserSelectMenuInteraction, StringSelectMenuInteraction, AnySelectMenuInteraction,
-  Guild, GuildMember,
+  Guild, GuildMember, Role,
   EmbedBuilder, ActionRowBuilder,
   ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -54,6 +55,38 @@ async function isAdmin(guild: Guild, userId: string): Promise<boolean> {
   return member.permissions.has(PermissionFlagsBits.ManageGuild) || guild.ownerId === userId;
 }
 
+async function getGuildCategory(guild: Guild, channelId: string | null | undefined) {
+  if (!channelId) return null;
+  const channel = guild.channels.cache.get(channelId) ?? await guild.channels.fetch(channelId).catch(() => null);
+  return channel?.type === ChannelType.GuildCategory ? channel : null;
+}
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function isUnicodeEmoji(value: string): boolean {
+  return /\p{Extended_Pictographic}/u.test(value);
+}
+
+async function applyRoleIcon(role: Role, value: string): Promise<void> {
+  if (!value) {
+    await role.edit({ icon: null, unicodeEmoji: null });
+    return;
+  }
+
+  if (isHttpUrl(value)) {
+    await role.edit({ unicodeEmoji: null });
+    await role.setIcon(value);
+    return;
+  }
+
+  if (!isUnicodeEmoji(value)) {
+    throw new Error('Ícone inválido: informe uma URL HTTPS ou um emoji Unicode.');
+  }
+
+  await role.edit({ icon: null, unicodeEmoji: value });
+}
 async function getFavoriteLimit(guild: Guild, userId: string, vipRole?: Awaited<ReturnType<typeof prisma.vipRole.findUnique>>): Promise<number> {
   if (vipRole?.favoriteLimit !== null && vipRole?.favoriteLimit !== undefined) {
     return vipRole.favoriteLimit;
@@ -87,9 +120,7 @@ export async function buildVipPanel(
   const favMembers    = vipRole?.favMembers ?? [];
   const vipGuildConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: guild.id } });
   const favoriteLimit = await getFavoriteLimit(guild, userId, vipRole);
-  const gradientCategory = vipGuildConfig?.gradientTicketCategoryId
-    ? guild.channels.cache.get(vipGuildConfig.gradientTicketCategoryId)
-    : null;
+  const gradientCategory = await getGuildCategory(guild, vipGuildConfig?.gradientTicketCategoryId);
 
   const embed = new EmbedBuilder()
     .setColor(0x9B59B6)
@@ -134,6 +165,11 @@ export async function buildVipPanel(
   );
 
   const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('vip:icon_menu:' + userId)
+      .setLabel('😀 Personalizar Ícone')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!personalRole && !favRole),
     new ButtonBuilder()
       .setCustomId('vip:delete_confirm:' + userId)
       .setLabel('🗑️ Excluir Meus Cargos')
@@ -435,15 +471,15 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
   if (action === 'gradient_ticket') {
     const vipConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: i.guild.id } });
     const categoryId = vipConfig?.gradientTicketCategoryId;
-    const category = categoryId ? i.guild.channels.cache.get(categoryId) : null;
-    if (!categoryId || !category || category.type !== ChannelType.GuildCategory) {
+    const category = await getGuildCategory(i.guild, categoryId);
+    if (!categoryId || !category) {
       return void i.reply({
         embeds: [errorEmbed('Gradiente não configurado', 'A categoria de tickets para personalização ainda não foi configurada pelos responsáveis do servidor.')],
         ephemeral: true,
       });
     }
 
-    const existing = await findOpenTicket(i.guild, i.user.id);
+    const existing = await findOpenTicket(i.guild, i.user.id, 'vip_gradiente');
     if (existing) {
       const channel = i.guild.channels.cache.get(existing.channelId);
       return void i.reply({
@@ -461,6 +497,51 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
         'Envie as duas ou mais cores desejadas, o nome do cargo e qualquer referência visual. A equipe vai aplicar o gradiente manualmente.',
     });
     return void i.editReply({ embeds: [success] });
+  }
+
+  if (action === 'icon_menu') {
+    const vipRole = await prisma.vipRole.findUnique({
+      where: { guildId_userId: { guildId: i.guild.id, userId: i.user.id } },
+    });
+    const personalRole = vipRole?.personalRoleId ? i.guild.roles.cache.get(vipRole.personalRoleId) : null;
+    const favRole = vipRole?.favRoleId ? i.guild.roles.cache.get(vipRole.favRoleId) : null;
+    const options = [
+      personalRole
+        ? new StringSelectMenuOptionBuilder()
+            .setLabel('Meu Cargo')
+            .setValue('personal')
+            .setDescription(personalRole.name)
+            .setEmoji('👑')
+        : null,
+      favRole
+        ? new StringSelectMenuOptionBuilder()
+            .setLabel('Cargo de Favoritos')
+            .setValue('fav')
+            .setDescription(favRole.name)
+            .setEmoji('⭐')
+        : null,
+    ].filter((option): option is StringSelectMenuOptionBuilder => option !== null);
+
+    if (!options.length) {
+      return void i.reply({ embeds: [errorEmbed('Nenhum cargo encontrado', 'Crie primeiro um cargo personalizado ou de favoritos.')], ephemeral: true });
+    }
+
+    await i.deferUpdate();
+    const select = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`vip_select:icon_role:${i.user.id}`)
+        .setPlaceholder('Selecione o cargo para personalizar...')
+        .addOptions(options),
+    );
+    return void i.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLORS.INFO)
+          .setTitle('😀 Personalizar Ícone')
+          .setDescription('Escolha o cargo e informe um emoji Unicode, como ⭐, 🔥, 💎 ou 🛡️.'),
+      ],
+      components: [select],
+    });
   }
 
   // ── Abrir modal: cargo pessoal ─────────────────────────────────────────────
@@ -496,11 +577,11 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
           .setCustomId('icon')
-          .setLabel('URL do ícone (opcional, requer boost Nv.2)')
+          .setLabel('URL ou emoji Unicode (opcional)')
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(512)
-          .setPlaceholder('https://i.imgur.com/exemplo.png'),
+          .setPlaceholder('https://... ou ⭐'),
       ),
     );
 
@@ -541,11 +622,11 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
           .setCustomId('icon')
-          .setLabel('URL do ícone (opcional, requer boost Nv.2)')
+          .setLabel('URL ou emoji Unicode (opcional)')
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(512)
-          .setPlaceholder('https://i.imgur.com/exemplo.png'),
+          .setPlaceholder('https://... ou ⭐'),
       ),
     );
 
@@ -634,6 +715,44 @@ export async function handleVipButton(i: ButtonInteraction, action: string, extr
 export async function handleVipModal(i: ModalSubmitInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
 
+  if (action === 'icon') {
+    if (!(await isVip(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Acesso VIP', 'Você não possui um cargo VIP neste servidor.')], ephemeral: true });
+    }
+
+    const roleType = extra[0];
+    const vipRole = await prisma.vipRole.findUnique({
+      where: { guildId_userId: { guildId: i.guild.id, userId: i.user.id } },
+    });
+    const roleId = roleType === 'fav' ? vipRole?.favRoleId : vipRole?.personalRoleId;
+    const role = roleId ? i.guild.roles.cache.get(roleId) ?? await i.guild.roles.fetch(roleId).catch(() => null) : null;
+    if (!role) {
+      return void i.reply({ embeds: [errorEmbed('Cargo não encontrado', 'Esse cargo não existe mais. Atualize o painel VIP e tente novamente.')], ephemeral: true });
+    }
+
+    const icon = i.fields.getTextInputValue('icon').trim();
+    if (icon && !isHttpUrl(icon) && !isUnicodeEmoji(icon)) {
+      return void i.reply({ embeds: [errorEmbed('Ícone inválido', 'Informe uma URL HTTPS ou um emoji Unicode, como ⭐ ou 🔥.')], ephemeral: true });
+    }
+
+    try {
+      await i.deferUpdate();
+      await applyRoleIcon(role, icon);
+    } catch (error) {
+      console.error('VIP icon error:', error);
+      return void i.editReply({
+        embeds: [errorEmbed('Não foi possível definir o ícone', 'O Discord recusou esse ícone. Verifique se a URL é HTTPS ou use um emoji Unicode.')],
+        components: [],
+      });
+    }
+
+    const { embed, rows } = await buildVipPanel(i.guild, i.user.id);
+    return void i.editReply({
+      embeds: [successEmbed('Ícone Atualizado', icon ? `O ícone do cargo foi definido como ${icon}.` : 'O ícone do cargo foi removido.'), embed],
+      components: rows,
+    });
+  }
+
   if (action === 'admin_limit_role') {
     if (!(await isAdmin(i.guild, i.user.id))) {
       return void i.reply({ embeds: [errorEmbed('Sem Permissão', 'Apenas administradores podem usar isto.')], ephemeral: true });
@@ -711,6 +830,13 @@ export async function handleVipModal(i: ModalSubmitInteraction, action: string, 
   const iconUrl  = i.fields.getTextInputValue('icon').trim() || null;
   const colorInt = colorRaw ? (hexToInt(colorRaw) ?? 0x9B59B6) : 0x9B59B6;
 
+  if (iconUrl && !isHttpUrl(iconUrl) && !isUnicodeEmoji(iconUrl)) {
+    return void i.reply({
+      embeds: [errorEmbed('Ícone inválido', 'Informe uma URL HTTPS ou um emoji Unicode, como ⭐ ou 🔥.')],
+      ephemeral: true,
+    });
+  }
+
   const isPersonal = action === 'personal';
   const roleType   = isPersonal ? 'personal' : 'fav';
 
@@ -735,9 +861,7 @@ export async function handleVipModal(i: ModalSubmitInteraction, action: string, 
       position: rolePosition,
     }).catch(e => { console.error('VIP edit role error:', e); return existingRole; });
 
-    if (iconUrl) {
-      await discordRole.setIcon(iconUrl).catch(() => null); // silencia erro se boost insuficiente
-    }
+    if (iconUrl) await applyRoleIcon(discordRole, iconUrl);
   } else {
     // Criar novo cargo
     discordRole = await guild.roles.create({
@@ -747,9 +871,7 @@ export async function handleVipModal(i: ModalSubmitInteraction, action: string, 
       reason: `VIP ${roleType} — criado por ${i.user.tag}`,
     });
 
-    if (iconUrl) {
-      await discordRole.setIcon(iconUrl).catch(() => null);
-    }
+    if (iconUrl) await applyRoleIcon(discordRole, iconUrl);
   }
 
   // Salvar no banco
@@ -784,6 +906,31 @@ export async function handleVipModal(i: ModalSubmitInteraction, action: string, 
 
 export async function handleVipSelect(i: AnySelectMenuInteraction, action: string, extra: string[]): Promise<void> {
   if (!i.guild) return;
+
+  if (action === 'icon_role') {
+    if (!(await isVip(i.guild, i.user.id))) {
+      return void i.reply({ embeds: [errorEmbed('Sem Acesso VIP', 'Você não possui um cargo VIP neste servidor.')], ephemeral: true });
+    }
+
+    const roleType = (i as StringSelectMenuInteraction).values[0];
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId(`vip_modal:icon:${roleType}`)
+        .setTitle(roleType === 'fav' ? '⭐ Ícone do Cargo de Favs' : '👑 Ícone do Meu Cargo')
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId('icon')
+              .setLabel('Emoji Unicode ou URL HTTPS')
+              .setStyle(TextInputStyle.Short)
+              .setRequired(false)
+              .setMaxLength(512)
+              .setPlaceholder('⭐ ou https://...'),
+          ),
+        ),
+    );
+    return;
+  }
 
   if (action === 'admin_category') {
     if (!(await isAdmin(i.guild, i.user.id))) {

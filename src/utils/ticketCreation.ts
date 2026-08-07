@@ -29,11 +29,12 @@ export interface TicketCreationOptions {
   description?: string;
 }
 
-export async function findOpenTicket(guild: Guild, userId: string) {
+export async function findOpenTicket(guild: Guild, userId: string, category?: string) {
   const tickets = await prisma.ticket.findMany({
     where: {
       authorId: userId,
       status: 'open',
+      ...(category ? { category } : {}),
       OR: [{ guildId: guild.id }, { guildId: null }],
     },
     orderBy: { createdAt: 'desc' },

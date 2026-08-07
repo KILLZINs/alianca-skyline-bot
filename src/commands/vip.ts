@@ -2,13 +2,19 @@
 // COMANDO /vip — Sistema de Cargos VIP Personalizados
 // ════════════════════════════════════════════════════════════════════════════
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, ChannelType } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Guild, GuildMember, ChannelType } from 'discord.js';
 import { Command } from '../types';
 import { prisma } from '../database/client';
 import { errorEmbed } from '../utils/embeds';
 import { checkAdmin } from '../utils/permissions';
 import { buildVipPanel, buildVipAdminPanel } from '../handlers/vipHandler';
 import { createTicketForUser, findOpenTicket } from '../utils/ticketCreation';
+
+async function getGuildCategory(guild: Guild, channelId: string | null | undefined) {
+  if (!channelId) return null;
+  const channel = guild.channels.cache.get(channelId) ?? await guild.channels.fetch(channelId).catch(() => null);
+  return channel?.type === ChannelType.GuildCategory ? channel : null;
+}
 
 export default {
   category: 'utilidade',
@@ -47,14 +53,14 @@ export default {
 
       const vipConfig = await prisma.vipGuildConfig.findUnique({ where: { guildId: guild.id } });
       const categoryId = vipConfig?.gradientTicketCategoryId;
-      const category = categoryId ? guild.channels.cache.get(categoryId) : null;
-      if (!categoryId || !category || category.type !== ChannelType.GuildCategory) {
+      const category = await getGuildCategory(guild, categoryId);
+      if (!categoryId || !category) {
         return interaction.editReply({
           embeds: [errorEmbed('Gradiente não configurado', 'A categoria de tickets para personalização ainda não foi configurada pelos responsáveis do servidor.')],
         });
       }
 
-      const existing = await findOpenTicket(guild, interaction.user.id);
+      const existing = await findOpenTicket(guild, interaction.user.id, 'vip_gradiente');
       if (existing) {
         const channel = guild.channels.cache.get(existing.channelId);
         return interaction.editReply({
