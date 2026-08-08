@@ -8,6 +8,16 @@ import { Enemy, scaleEnemy } from '../constants/enemies';
 import { getItem } from '../constants/items';
 import { DIVINE_SKILLS, skillEffectValue } from '../constants/skills';
 import type { SkillRank } from '../constants/skills';
+import { getActiveBuffs, getCombatBuffMultipliers } from './temp-buffs';
+
+export const DUNGEON_COOLDOWN_MS = 5 * 60 * 1000;
+
+export class CombatBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CombatBlockedError';
+  }
+}
 
 export interface CombatResult {
   result: 'vitoria' | 'derrota' | 'fuga' | 'empate';
@@ -44,6 +54,9 @@ export async function runCombat(
   useSkill: boolean = false,
   guildId?: string,
 ): Promise<CombatResult> {
+  const slot = await claimDungeonSlot(char.discordId, char.currentHp, char.currentEnergy);
+  if (!slot.success) throw new CombatBlockedError(slot.message);
+
   const stats = computeStats(char);
   const scaledEnemy = scaleEnemy(enemy, char.level);
 
@@ -114,8 +127,7 @@ export async function runCombat(
   if (state.playerHp <= 0 && state.enemyHp <= 0) {
     result = 'empate';
     state.log.push(`\n💥 **EMPATE!** Ambos caíram ao mesmo tempo!`);
-    xpGained = Math.floor(scaledEnemy.xpReward * 0.3);
-    goldGained = Math.floor(scaledEnemy.goldMin * 0.5);
+    state.log.push('Nenhuma recompensa foi concedida: uma vitória precisa ser conquistada.');
   } else if (state.enemyHp <= 0) {
     result = 'vitoria';
     state.log.push(`\n🏆 **VITÓRIA!** ${enemy.name} foi derrotado!`);
@@ -123,13 +135,16 @@ export async function runCombat(
     // calcular recompensas (com multiplicadores de eventos de mundo)
     const { getEventMultipliers } = await import('../panels/world-events');
     const worldMults = guildId ? await getEventMultipliers(guildId) : { xp: 1, gold: 1, dropBonus: 0, noEnergy: false, enemyMult: 1 };
-    const goldBonus = (1 + (stats.goldBonus / 100)) * worldMults.gold;
-    const xpBonus   = (1 + ((stats.xpBonus) / 100)) * worldMults.xp;
+    const combatBuffs = getCombatBuffMultipliers(await getActiveBuffs(char.discordId));
+    const goldBonus = (1 + (stats.goldBonus / 100)) * worldMults.gold * combatBuffs.gold;
+    const xpBonus   = (1 + ((stats.xpBonus) / 100)) * worldMults.xp * combatBuffs.xp;
     xpGained   = Math.floor(scaledEnemy.xpReward * xpBonus);
     goldGained = Math.floor((scaledEnemy.goldMin + Math.random() * (scaledEnemy.goldMax - scaledEnemy.goldMin)) * goldBonus);
 
     if (worldMults.xp > 1) state.log.push(`⭐ Bônus de evento: **×${worldMults.xp} XP**!`);
     if (worldMults.gold > 1) state.log.push(`💰 Bônus de evento: **×${worldMults.gold} Ouro**!`);
+    if (combatBuffs.xp > 1) state.log.push(`💜 Buff ativo: **×${combatBuffs.xp} XP**!`);
+    if (combatBuffs.gold > 1) state.log.push(`💰 Buff ativo: **×${combatBuffs.gold} Ouro**!`);
 
     // drop de itens (com bônus de meteor)
     for (const drop of enemy.dropTable) {
@@ -147,9 +162,8 @@ export async function runCombat(
   } else {
     result = 'derrota';
     state.log.push(`\n💀 **DERROTA!** Você foi derrotado por ${enemy.name}...`);
-    xpGained = Math.floor(scaledEnemy.xpReward * 0.05);
     goldGained = 0;
-    state.log.push(`💫 +${xpGained} XP de consolação`);
+    state.log.push('Você não ganhou XP, mas saiu vivo o bastante para tentar novamente depois de se recuperar.');
   }
 
   // ── Salvar no banco ────────────────────────────────────────────────────────
@@ -162,24 +176,28 @@ export async function runCombat(
   if (blessingCheck.noEnergy) state.log.push('✨ **Bênção dos Antigos**: energia não consumida!');
   const finalEnergy = Math.max(0, state.playerEnergy - energyCost);
 
+  if (xpGained > 0) {
+    await addRpgXp(char, xpGained, {
+      currentHp: Math.max(1, newHp),
+      currentEnergy: finalEnergy,
+    });
+  }
+
   await prisma.rpgCharacter.update({
     where: { discordId: char.discordId },
     data: {
-      currentHp: Math.max(1, newHp),
-      currentEnergy: finalEnergy,
+      ...(xpGained > 0 ? {} : { currentHp: Math.max(1, newHp), currentEnergy: finalEnergy }),
       gold: { increment: goldGained },
       totalKills: result === 'vitoria' ? { increment: 1 } : undefined,
       totalDeaths: result === 'derrota' ? { increment: 1 } : undefined,
       totalWins:   result === 'vitoria' ? { increment: 1 } : undefined,
       bossKills:   (result === 'vitoria' && enemy.type === 'boss') ? { increment: 1 } : undefined,
       karma: enemy.karmaEffect ? { increment: enemy.karmaEffect } : undefined,
-      lastDungeon: new Date(),
+      // The slot is claimed before the simulation. Rewriting it here keeps
+      // the cooldown anchored to the beginning of the encounter.
+      lastDungeon: slot.startedAt,
     },
   });
-
-  if (xpGained > 0) {
-    await addRpgXp(char, xpGained);
-  }
 
   // ── XP de habilidade divina (toda batalha com XP ganho) ─────────────────────
   // XP maior se habilidade foi ativada; menor se batalhou sem ela
@@ -350,11 +368,43 @@ function calcEnemyDamage(
 // ─── Dar item ao personagem ────────────────────────────────────────────────
 
 export async function giveItem(discordId: string, itemId: string, qty: number = 1) {
+  if (!getItem(itemId)) throw new Error(`Item inválido: ${itemId}`);
+  if (!Number.isInteger(qty) || qty <= 0) throw new Error('A quantidade do item deve ser positiva.');
   return prisma.rpgInventoryItem.upsert({
     where: { characterId_itemId: { characterId: discordId, itemId } },
     update: { quantity: { increment: qty } },
     create: { characterId: discordId, itemId, quantity: qty },
   });
+}
+
+export async function claimDungeonSlot(
+  discordId: string,
+  currentHp: number,
+  currentEnergy: number,
+): Promise<{ success: true; startedAt: Date } | { success: false; message: string }> {
+  if (currentHp <= 0) return { success: false, message: 'Você está sem HP. Vá à cidade e se cure antes de batalhar.' };
+  if (currentEnergy < 10) return { success: false, message: 'Você precisa de pelo menos **10⚡** para iniciar uma batalha.' };
+
+  const startedAt = new Date();
+  const cutoff = new Date(startedAt.getTime() - DUNGEON_COOLDOWN_MS);
+  const claimed = await prisma.rpgCharacter.updateMany({
+    where: {
+      discordId,
+      currentHp: { gt: 0 },
+      currentEnergy: { gte: 10 },
+      OR: [{ lastDungeon: null }, { lastDungeon: { lte: cutoff } }],
+    },
+    data: { lastDungeon: startedAt },
+  });
+
+  if (claimed.count === 0) {
+    const fresh = await prisma.rpgCharacter.findUnique({ where: { discordId } });
+    const remaining = fresh?.lastDungeon
+      ? Math.max(1, Math.ceil((DUNGEON_COOLDOWN_MS - (Date.now() - fresh.lastDungeon.getTime())) / 60000))
+      : 5;
+    return { success: false, message: `Sua próxima batalha estará disponível em **${remaining} minuto(s)**.` };
+  }
+  return { success: true, startedAt };
 }
 
 // ─── Verificar cooldown ────────────────────────────────────────────────────

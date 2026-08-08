@@ -133,7 +133,7 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
           await i.editReply({ embeds: [errorEmbed('Sem Energia ⚡', `Você tem apenas **${char.currentEnergy}** de energia — mínimo para batalhar é **10**.\nVá à 🏰 Cidade → 🏥 Curar para restaurar energia.`)], components: [] });
           return;
         }
-        const { embed: battleEmbed, rows: battleRows } = await doBattleRandom(char);
+        const { embed: battleEmbed, rows: battleRows } = await doBattleRandom(char, i.guildId ?? '');
 
         // Track missão RPG: matar inimigos
         try {
@@ -168,7 +168,7 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         }
         const boss = bosses[0];
         const { doBattleEnemy } = await import('../panels/dungeon');
-        const { embed: bossEmbed, rows: bossRows } = await doBattleEnemy(char, boss.id);
+        const { embed: bossEmbed, rows: bossRows } = await doBattleEnemy(char, boss.id, i.guildId ?? '');
 
         // Track boss kill mission
         try {
@@ -209,7 +209,9 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
         const stats = computeStats(char);
         const hpMissing = stats.maxHp - char.currentHp;
         const enMissing = stats.maxEnergy - char.currentEnergy;
-        const cost = Math.floor((hpMissing + enMissing) * 0.5);
+        // Recovery is a useful part of the loop, not a punishment that
+        // consumes the entire reward from the previous encounter.
+        const cost = Math.max(5, Math.ceil(hpMissing * 0.12 + enMissing * 0.08));
 
         if (hpMissing === 0 && enMissing === 0) {
           await i.editReply({ embeds: [infoEmbed('🏥 Curandeiro', '✅ Você já está com HP e Energia no máximo!')], components: [buildCidadeButtons(), buildCidadeButtons2()] });
@@ -220,10 +222,14 @@ export async function handleRpgButton(i: ButtonInteraction, action: string): Pro
           return;
         }
 
-        await prisma.rpgCharacter.update({
-          where: { discordId },
+        const healed = await prisma.rpgCharacter.updateMany({
+          where: { discordId, gold: { gte: cost } },
           data: { currentHp: stats.maxHp, currentEnergy: stats.maxEnergy, gold: { decrement: cost }, lastRest: new Date() },
         });
+        if (healed.count === 0) {
+          await i.editReply({ embeds: [errorEmbed('🏥 Ouro Insuficiente', `Curar custa **${cost} ouro** e seu saldo mudou. Tente novamente após conferir seu perfil.`)], components: [buildCidadeButtons(), buildCidadeButtons2()] });
+          return;
+        }
 
         await i.editReply({
           embeds: [infoEmbed('🏥 Curado!', `HP e Energia restaurados por **${cost} ouro**.\n❤️ HP: **${stats.maxHp}/${stats.maxHp}** | ⚡ Energia: **${stats.maxEnergy}/${stats.maxEnergy}**`)],

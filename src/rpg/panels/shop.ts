@@ -29,7 +29,7 @@ export function buildShopEmbed(char: FullCharacter, category?: string): EmbedBui
     return embed;
   }
 
-  const items = ITEM_LIST.filter(i => i.slot === category && i.price > 0 && i.minLevel <= char.level + 5);
+  const items = ITEM_LIST.filter(i => i.slot === category && i.price > 0 && i.minLevel <= char.level);
   if (items.length === 0) {
     embed.setDescription(`Nenhum item disponível em **${category}** para seu nível.`);
     return embed;

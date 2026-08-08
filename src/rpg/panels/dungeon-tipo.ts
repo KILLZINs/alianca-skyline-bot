@@ -7,12 +7,13 @@ import {
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import { prisma } from '../../database/client';
-import { FullCharacter, computeStats, hpBar } from '../services/character';
+import { FullCharacter, computeStats, hpBar, addRpgXp } from '../services/character';
 import { DUNGEON_TYPES, DUNGEON_TYPE_LIST, getDungeonType, type DungeonType } from '../constants/dungeon-types';
 import { getLocation } from '../constants/locations';
 import { getEnemiesForLocation, getBossesForLocation, scaleEnemy } from '../constants/enemies';
 import { getDayPhase, PHASE_INFO } from '../services/day-night';
-import { giveItem } from '../services/combat';
+import { giveItem, claimDungeonSlot } from '../services/combat';
+import { getActiveBuffs, getCombatBuffMultipliers } from '../services/temp-buffs';
 
 export function buildDungeonTypeEmbed(char: FullCharacter): EmbedBuilder {
   const loc = getLocation(char.currentLocation);
@@ -85,20 +86,60 @@ export async function doBattleWithType(
   guildId?: string,
 ): Promise<{ embed: EmbedBuilder; rows: ActionRowBuilder<ButtonBuilder>[] }> {
   const dungeonType = getDungeonType(dungeonTypeId);
+  if (!dungeonType) {
+    return {
+      embed: new EmbedBuilder().setColor(0xE74C3C).setTitle('Tipo inválido').setDescription('Essa dungeon não existe mais. Atualize o painel e tente novamente.'),
+      rows: [buildDungeonTypeButtons()],
+    };
+  }
   const loc = getLocation(char.currentLocation);
+  if (loc.isSafeZone || !loc.hasDungeon) {
+    return {
+      embed: new EmbedBuilder().setColor(0xE74C3C).setTitle('Dungeon indisponível').setDescription('Viaje para uma região com dungeon antes de iniciar este combate.'),
+      rows: [buildDungeonTypeButtons()],
+    };
+  }
+  if (char.level < dungeonType.minLevel) {
+    return {
+      embed: new EmbedBuilder().setColor(0xE74C3C).setTitle('Nível insuficiente').setDescription(`Esta dungeon exige nível **${dungeonType.minLevel}**.`),
+      rows: [buildDungeonTypeButtons()],
+    };
+  }
+  if (char.currentHp <= 0 || char.currentEnergy < 12) {
+    return {
+      embed: new EmbedBuilder().setColor(0xF39C12).setTitle('Recursos insuficientes').setDescription('Você precisa estar vivo e ter pelo menos **12⚡** para entrar nesta dungeon.'),
+      rows: [buildDungeonTypeButtons()],
+    };
+  }
   const stats = computeStats(char);
   const phase = getDayPhase();
   const phaseInfo = PHASE_INFO[phase];
 
   // Escolher inimigo
-  let baseEnemy = useRandom
-    ? (() => { const list = getEnemiesForLocation(loc.id, char.level); return list[Math.floor(Math.random() * list.length)]; })()
-    : getEnemiesForLocation(loc.id, char.level).find(e => e.id === enemyId) ?? getEnemiesForLocation(loc.id, char.level)[0];
+  const availableEnemies = getEnemiesForLocation(loc.id, char.level);
+  const baseEnemy = useRandom
+    ? availableEnemies[Math.floor(Math.random() * availableEnemies.length)]
+    : availableEnemies.find(e => e.id === enemyId);
 
   if (!baseEnemy) {
     return {
       embed: new EmbedBuilder().setColor(0xFF0000).setTitle('Sem Inimigos').setDescription('Nenhum inimigo disponível aqui neste nível.'),
       rows: [],
+    };
+  }
+
+  if (!useRandom && !baseEnemy) {
+    return {
+      embed: new EmbedBuilder().setColor(0xE74C3C).setTitle('Inimigo inválido').setDescription('Esse inimigo não pertence à região ou não está disponível no seu nível.'),
+      rows: [buildDungeonTypeButtons()],
+    };
+  }
+
+  const slot = await claimDungeonSlot(char.discordId, char.currentHp, char.currentEnergy);
+  if (!slot.success) {
+    return {
+      embed: new EmbedBuilder().setColor(0xF39C12).setTitle('⏳ Dungeon indisponível').setDescription(slot.message),
+      rows: [buildDungeonTypeButtons()],
     };
   }
 
@@ -179,11 +220,13 @@ export async function doBattleWithType(
     // Aplicar multiplicadores de eventos de mundo
     const { getEventMultipliers } = await import('../panels/world-events');
     const worldMults = guildId ? await getEventMultipliers(guildId) : { xp: 1, gold: 1, dropBonus: 0, noEnergy: false, enemyMult: 1 };
-    xpGained  = Math.round(enemy.xpReward  * dungeonType.xpMult   * (1 + phaseInfo.xpBonus) * worldMults.xp);
-    goldGained = Math.round((Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin) * dungeonType.goldMult * (1 + phaseInfo.goldBonus) * worldMults.gold);
+    const combatBuffs = getCombatBuffMultipliers(await getActiveBuffs(char.discordId));
+    xpGained  = Math.round(enemy.xpReward * dungeonType.xpMult * (1 + phaseInfo.xpBonus) * worldMults.xp * combatBuffs.xp);
+    goldGained = Math.round((Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin) * dungeonType.goldMult * (1 + phaseInfo.goldBonus) * worldMults.gold * combatBuffs.gold);
 
     if (worldMults.xp > 1) log.push(`⭐ Bônus de evento: **×${worldMults.xp} XP**!`);
     if (worldMults.gold > 1) log.push(`💰 Bônus de evento: **×${worldMults.gold} Ouro**!`);
+    if (combatBuffs.xp > 1) log.push(`💜 Buff ativo: **×${combatBuffs.xp} XP**!`);
 
     // Drop de itens (com bônus de meteor)
     for (const drop of (enemy.dropTable ?? [])) {
@@ -194,22 +237,25 @@ export async function doBattleWithType(
     }
   }
 
+  if (xpGained > 0) {
+    await addRpgXp(char, xpGained, { currentHp: playerHp, currentEnergy: playerEnergy });
+  } else {
+    await prisma.rpgCharacter.update({
+      where: { discordId: char.discordId },
+      data: { currentHp: playerHp, currentEnergy: playerEnergy },
+    });
+  }
+
   await prisma.rpgCharacter.update({
     where: { discordId: char.discordId },
     data: {
-      currentHp: playerHp,
-      currentEnergy: playerEnergy,
       gold: won ? { increment: goldGained } : undefined,
       totalWins: won ? { increment: 1 } : undefined,
       totalDeaths: !won ? { increment: 1 } : undefined,
       totalKills: won ? { increment: 1 } : undefined,
-      lastDungeon: new Date(),
+      lastDungeon: slot.startedAt,
     },
   });
-
-  if (xpGained > 0) {
-    await prisma.rpgCharacter.update({ where: { discordId: char.discordId }, data: { xp: { increment: xpGained } } });
-  }
 
   // ── XP de habilidade divina (toda vitória com XP ganho) ──────────────────────
   if (xpGained > 0 && char.divineSkillId) {

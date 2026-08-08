@@ -6,8 +6,7 @@ import { FullCharacter, computeStats, hpBar } from '../services/character';
 import { getLocation } from '../constants/locations';
 import { getEnemiesForLocation, getBossesForLocation, getEnemy } from '../constants/enemies';
 import { getItem } from '../constants/items';
-import { isDungeonOnCooldown } from '../services/combat';
-import { runCombat } from '../services/combat';
+import { isDungeonOnCooldown, runCombat, CombatBlockedError } from '../services/combat';
 import { applyTemplate } from '../../utils/embedTemplates';
 
 export function buildDungeonEmbed(char: FullCharacter): EmbedBuilder {
@@ -113,7 +112,15 @@ export async function doBattleRandom(char: FullCharacter, guildId?: string): Pro
   }
 
   const enemy = enemies[Math.floor(Math.random() * enemies.length)];
-  const result = await runCombat(char, enemy, false, guildId);
+  let result;
+  try {
+    result = await runCombat(char, enemy, false, guildId);
+  } catch (error) {
+    if (error instanceof CombatBlockedError) {
+      return { embed: new EmbedBuilder().setColor(0xF39C12).setTitle('⏳ Batalha indisponível').setDescription(error.message), rows: [buildDungeonButtons(char)] };
+    }
+    throw error;
+  }
   return buildCombatResultEmbed(result, char);
 }
 
@@ -125,7 +132,26 @@ export async function doBattleEnemy(char: FullCharacter, enemyId: string, guildI
       rows: [],
     };
   }
-  const result = await runCombat(char, enemy, true); // usa habilidade divina
+  const loc = getLocation(char.currentLocation);
+  const allowed = [
+    ...getEnemiesForLocation(loc.id, char.level),
+    ...getBossesForLocation(loc.id).filter(b => char.level >= b.minLevel),
+  ];
+  if (!allowed.some(candidate => candidate.id === enemy.id)) {
+    return {
+      embed: new EmbedBuilder().setColor(0xE74C3C).setTitle('Inimigo inválido').setDescription('Esse inimigo não pode ser enfrentado nesta região ou neste nível.'),
+      rows: [buildDungeonButtons(char)],
+    };
+  }
+  let result;
+  try {
+    result = await runCombat(char, enemy, true, guildId);
+  } catch (error) {
+    if (error instanceof CombatBlockedError) {
+      return { embed: new EmbedBuilder().setColor(0xF39C12).setTitle('⏳ Batalha indisponível').setDescription(error.message), rows: [buildDungeonButtons(char)] };
+    }
+    throw error;
+  }
   return buildCombatResultEmbed(result, char);
 }
 

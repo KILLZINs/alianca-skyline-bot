@@ -6,7 +6,7 @@ import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from 'discord.js';
 import { prisma } from '../../database/client';
-import { FullCharacter, computeStats } from '../services/character';
+import { FullCharacter, computeStats, addRpgXp } from '../services/character';
 import { rollExploreEvent, EXPLORE_COOLDOWN_MS, EXPLORE_ENERGY_COST } from '../constants/exploration';
 import { addTempBuff } from '../services/temp-buffs';
 import { getLocation } from '../constants/locations';
@@ -87,48 +87,63 @@ export async function doExplore(char: FullCharacter): Promise<{ success: boolean
     return { success: false, message: 'Você está sem HP! Cure-se na cidade antes de explorar.' };
   }
 
-  const lastExplore = char.lastExplore;
-  if (lastExplore && (Date.now() - lastExplore.getTime()) < EXPLORE_COOLDOWN_MS) {
-    const rem = Math.ceil((EXPLORE_COOLDOWN_MS - (Date.now() - lastExplore.getTime())) / 60000);
+  const startedAt = new Date();
+  const cutoff = new Date(startedAt.getTime() - EXPLORE_COOLDOWN_MS);
+  const claimed = await prisma.rpgCharacter.updateMany({
+    where: {
+      discordId: char.discordId,
+      currentHp: { gt: 0 },
+      currentEnergy: { gte: EXPLORE_ENERGY_COST },
+      OR: [{ lastExplore: null }, { lastExplore: { lte: cutoff } }],
+    },
+    data: { lastExplore: startedAt },
+  });
+  if (claimed.count === 0) {
+    const fresh = await prisma.rpgCharacter.findUnique({ where: { discordId: char.discordId } });
+    const rem = fresh?.lastExplore
+      ? Math.ceil((EXPLORE_COOLDOWN_MS - (Date.now() - fresh.lastExplore.getTime())) / 60000)
+      : 0;
+    if (fresh && fresh.currentEnergy < EXPLORE_ENERGY_COST) {
+      return { success: false, message: `Energia insuficiente! Precisa de **${EXPLORE_ENERGY_COST}⚡**.` };
+    }
     return { success: false, message: `Aguarde **${rem} min** antes de explorar novamente.` };
   }
 
   const phase = getDayPhase();
   const phaseXpBonus = 1 + PHASE_INFO[phase].xpBonus;
-  const event = rollExploreEvent(char.level);
+  const current = await prisma.rpgCharacter.findUnique({ where: { discordId: char.discordId }, include: { equipment: true } });
+  if (!current) return { success: false, message: 'Personagem não encontrado.' };
+  const event = rollExploreEvent(current.level);
 
-  const stats = computeStats(char);
+  const stats = computeStats(current);
 
   // Calcular resultados finais
   const xpGained   = Math.round(event.xpResult * phaseXpBonus);
   const goldGained  = Math.max(0, event.goldResult);
-  const goldLost    = event.goldResult < 0 ? Math.min(char.gold, Math.abs(event.goldResult)) : 0;
+  const goldLost    = event.goldResult < 0 ? Math.min(current.gold, Math.abs(event.goldResult)) : 0;
   const hpChange    = event.hpResult;
-  const newHp       = Math.max(0, Math.min(stats.maxHp, char.currentHp + hpChange));
-  const newEnergy   = Math.max(0, Math.min(stats.maxEnergy, char.currentEnergy - EXPLORE_ENERGY_COST + Math.max(0, event.energyResult)));
+  const newHp       = Math.max(0, Math.min(stats.maxHp, current.currentHp + hpChange));
+  const newEnergy   = Math.max(0, Math.min(stats.maxEnergy, current.currentEnergy - EXPLORE_ENERGY_COST + Math.max(0, event.energyResult)));
 
   // Buff de mercador
-  if (event.type === 'merchant' && event.buff && char.gold >= Math.abs(event.goldResult)) {
-    await addTempBuff(char.discordId, event.buff.type as any, event.buff.value, event.buff.durationMs, 'exploracao', event.buff.label);
+  if (event.type === 'merchant' && event.buff && current.gold >= Math.abs(event.goldResult)) {
+    await addTempBuff(current.discordId, event.buff.type as any, event.buff.value, event.buff.durationMs, 'exploracao', event.buff.label);
   }
 
+  if (xpGained > 0) {
+    await addRpgXp(current, xpGained, { currentHp: newHp, currentEnergy: newEnergy });
+  }
   await prisma.rpgCharacter.update({
-    where: { discordId: char.discordId },
+    where: { discordId: current.discordId },
     data: {
-      gold: char.gold + goldGained - goldLost,
-      currentHp: newHp,
-      currentEnergy: newEnergy,
-      lastExplore: new Date(),
+      gold: { increment: goldGained - goldLost },
+      ...(xpGained > 0 ? {} : { currentHp: newHp, currentEnergy: newEnergy }),
+      lastExplore: startedAt,
     },
   });
 
-  // Dar XP direto (incremento simples)
-  if (xpGained > 0) {
-    await prisma.rpgCharacter.update({ where: { discordId: char.discordId }, data: { xp: { increment: xpGained } } });
-  }
-
   // Missões
-  await incrementMissionProgress(char.discordId, 'explore', 1).catch(() => null);
+  await incrementMissionProgress(current.discordId, 'explore', 1).catch(() => null);
 
   // Construir embed do resultado
   const fields: { name: string; value: string; inline: boolean }[] = [];

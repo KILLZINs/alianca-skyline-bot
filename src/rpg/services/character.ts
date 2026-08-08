@@ -131,7 +131,11 @@ export function computeStats(char: FullCharacter): ComputedStats {
 
 // ─── XP e Level Up ────────────────────────────────────────────────────────
 
-export async function addRpgXp(char: FullCharacter, xpGained: number): Promise<{ char: FullCharacter; leveledUp: boolean; newLevel: number }> {
+export async function addRpgXp(
+  char: FullCharacter,
+  xpGained: number,
+  state?: { currentHp?: number; currentEnergy?: number },
+): Promise<{ char: FullCharacter; leveledUp: boolean; newLevel: number }> {
   let { xp, level } = char;
   xp += xpGained;
   let leveledUp = false;
@@ -152,12 +156,14 @@ export async function addRpgXp(char: FullCharacter, xpGained: number): Promise<{
   const newMaxHp     = cls.baseHp + (newLevelStats.vit * cls.hpPerVit);
   const newMaxEnergy = cls.baseEnergy + (level * cls.energyPerLevel);
 
+  const baseHp = state?.currentHp ?? char.currentHp;
   const updated = await prisma.rpgCharacter.update({
     where: { discordId: char.discordId },
     data: {
       xp, level, statPoints, skillPoints,
       maxHp: newMaxHp, maxEnergy: newMaxEnergy,
-      currentHp: Math.min(char.currentHp + (leveledUp ? newMaxHp : 0), newMaxHp),
+      currentHp: Math.min(baseHp + (leveledUp ? newMaxHp : 0), newMaxHp),
+      ...(state?.currentEnergy === undefined ? {} : { currentEnergy: state.currentEnergy }),
     },
     include: { equipment: true },
   });
@@ -180,9 +186,12 @@ export async function applyPassiveEnergyRegen(char: FullCharacter): Promise<Full
   if (gained <= 0) return char;
 
   const newEnergy = Math.min(char.currentEnergy + gained, stats.maxEnergy);
+  // Keep the unused remainder so opening a panel does not discard accumulated
+  // regeneration time when the character reaches the cap.
+  const nextTick = new Date(lastTick + gained * 3 * 60_000);
   return prisma.rpgCharacter.update({
     where: { discordId: char.discordId },
-    data:  { currentEnergy: newEnergy, lastEnergyTick: new Date() },
+    data:  { currentEnergy: newEnergy, lastEnergyTick: nextTick },
     include: { equipment: true },
   });
 }
@@ -206,9 +215,12 @@ export async function applyChatEnergyRegen(discordId: string): Promise<void> {
 
   const gained = Math.floor(Math.random() * 2) + 1; // +1 ou +2
   const newEnergy = Math.min(char.currentEnergy + gained, stats.maxEnergy);
+  const lastTick = char.lastEnergyTick?.getTime() ?? char.createdAt.getTime();
+  const passiveGained = Math.max(0, Math.floor((now - lastTick) / (3 * 60_000)));
+  const nextTick = new Date(lastTick + passiveGained * 3 * 60_000);
   await prisma.rpgCharacter.update({
     where: { discordId },
-    data:  { currentEnergy: newEnergy, lastEnergyTick: new Date() },
+    data:  { currentEnergy: newEnergy, lastEnergyTick: nextTick },
   });
   _chatEnergyCooldowns.set(discordId, now);
 }
